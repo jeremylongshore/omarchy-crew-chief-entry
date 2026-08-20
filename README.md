@@ -2,20 +2,52 @@
 
 # Crew Chief
 
-Every running Claude Code session in your Omarchy bar — and a loud pill the moment one
-is blocked waiting on you.
+Every running AI coding agent session in your Omarchy bar — any harness — and a loud
+pill the moment one is blocked waiting on you.
 
-You're running four agent sessions across four projects. One of them has been sitting on a
-permission prompt for six minutes. Which one? Crew Chief knows: a bar pill counts your
-running sessions — `󰋎 4` — and the moment a session is blocked waiting on you or finishes
-its run, the pill goes loud in your theme's active color: `󰋎 2 need you`. The panel lists
-the whole fleet, attention first: project, state, how long it's been waiting, and the
-actual prompt it's stuck on.
+You're running four agent sessions across four projects — maybe Claude Code in two,
+Codex in one, Goose in another. One of them has been sitting on a permission prompt for
+six minutes. Which one? Crew Chief knows: a bar pill counts your running sessions —
+`󰋎 4` — and the moment a session is blocked waiting on you or finishes its run, the pill
+goes loud in your theme's active color: `󰋎 2 need you`. The panel lists the whole fleet,
+attention first: project, harness, state, how long it's been waiting, and the actual
+prompt it's stuck on.
 
 ![Crew Chief preview](preview.png)
 
 The existing agent widgets tell you about your *quota*. Crew Chief tells you **who needs
-you right now** — it's fed by Claude Code's own hook events, not by polling a usage API.
+you right now** — fed by each harness's own lifecycle events, not by polling a usage API.
+
+## Works with every make and model
+
+Crew Chief is harness-agnostic by design: the widget watches a spool of tiny JSON state
+files ([the protocol](docs/PROTOCOL.md)), and anything that can run a command can report
+in. Three integration tiers:
+
+| Harness | Integration | States you get |
+| --- | --- | --- |
+| **Anything running under [Herdr](https://herdr.dev)** — its detection roster covers Claude Code, Codex, Amp, Cline, Copilot, and more | **zero config**: when `herdr` is installed, the widget snapshots `herdr agent list` on every poll (`herdrSync` setting, default On, harmless no-op without it) | working / needs you (blocked) / done, with the pane title as context |
+| **Claude Code** (standalone) | first-class hook adapter, one-command install (below) | working / needs you / done, with the blocking prompt |
+| **OpenAI Codex** (standalone) | `adapters/codex-notify` wired into `notify` in `~/.codex/config.toml` | done (turn complete) |
+| **Goose, Kilo, pi, Hermes, aider, opencode, anything** | call `bin/crew-chief-report` from whatever event surface your tool has — hooks, notify programs, wrappers, extensions | whatever you report |
+
+Remote fleets work too: sessions you drive from your phone (Moshi/mosh, SSH) report in
+wherever the harness actually runs. To see another machine's fleet on this bar, sync its
+spool directory over (Syncthing, rsync) or have its reporter write via SSH — rows are
+plain files and stale ones age out automatically.
+
+The generic reporter is one command with sane defaults (session id defaults to the
+harness PID, directory to `$PWD`):
+
+```bash
+crew-chief-report working   --agent goose
+crew-chief-report needs_you --agent kilo --message "waiting on approval"
+crew-chief-report done      --agent codex
+crew-chief-report end
+```
+
+If your favorite harness has a native event surface you'd like a first-class adapter
+for, open an issue — adapters are ~40 lines of bash.
 
 ## Install
 
@@ -23,8 +55,8 @@ you right now** — it's fed by Claude Code's own hook events, not by polling a 
 omarchy plugin add https://github.com/jeremylongshore/omarchy-crew-chief-entry --enable
 ```
 
-Add **Crew Chief** to your bar layout (Omarchy menu → Bar), then wire the Claude Code hook
-(one command, idempotent, backs up your settings first):
+Add **Crew Chief** to your bar layout (Omarchy menu → Bar), then wire your harnesses.
+For Claude Code (one command, idempotent, backs up your settings first):
 
 ```bash
 ~/.config/omarchy/plugins/omarchy-crew-chief-entry/hooks/install-claude-hooks
@@ -33,7 +65,16 @@ Add **Crew Chief** to your bar layout (Omarchy menu → Bar), then wire the Clau
 Restart any running Claude Code sessions so they pick up the hooks. That's it — new
 sessions report in automatically.
 
-## How it works
+For Codex, point `notify` at the adapter in `~/.codex/config.toml`:
+
+```toml
+notify = ["/home/YOU/.config/omarchy/plugins/omarchy-crew-chief-entry/adapters/codex-notify"]
+```
+
+For everything else, call `bin/crew-chief-report` from your tool's event hooks — see
+[docs/PROTOCOL.md](docs/PROTOCOL.md).
+
+## How it works (Claude Code adapter)
 
 Claude Code fires [hook events](https://code.claude.com/docs/en/hooks) at lifecycle
 moments. The installed hook (`hooks/crew-chief-event`, ~40 lines of bash + jq) writes one
@@ -45,6 +86,9 @@ tiny JSON state file per session under `~/.local/state/omarchy/crew-chief/`:
 | `Notification` (permission prompt, waiting on input) | `NEEDS YOU` |
 | `Stop` (finished its run) | `DONE` |
 | `SessionEnd` | removed |
+
+Every other harness reaches the same spool through its own adapter or the generic
+reporter — the widget treats all makes and models identically.
 
 The widget polls that spool (default every 3s — it's a handful of local files, effectively
 free) and renders the fleet. No network. No transcript content. No secrets — the spool
@@ -67,6 +111,7 @@ carries session id, project directory, state, timestamp, and the notification he
 | `pollSec` | `3` | Spool poll interval (seconds) |
 | `staleMinutes` | `240` | Forget sessions with no events after this long |
 | `showDone` | `On` | Keep finished sessions visible until dismissed |
+| `herdrSync` | `On` | Snapshot Herdr-detected agent panes into the fleet each poll (no-op without Herdr) |
 
 ## Remove
 
@@ -80,8 +125,10 @@ To unwire the hook, restore the backup the installer made
 
 ## Dependencies
 
-- `jq` (ships with Omarchy) — used by the hook script.
-- [Claude Code](https://code.claude.com) with hooks support (any 2025+ release).
+- `jq` (ships with Omarchy) — used by the hook scripts and reporter.
+- At least one agent harness to watch: [Claude Code](https://code.claude.com) (hooks,
+  any 2025+ release), [Codex CLI](https://github.com/openai/codex) (`notify`), or
+  anything that can invoke `crew-chief-report`.
 
 ## Development
 

@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Jeremy Longshore",
   "license": "MIT",
-  "description": "See every running Claude Code session in the Omarchy bar and get alerted the moment one is blocked waiting on your input or finishes its run.",
+  "description": "See every running AI coding agent session in the Omarchy bar — Claude Code, Codex, Goose, Kilo, pi, any harness — and get alerted the moment one is blocked waiting on your input.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,18 +14,20 @@
   },
   "barWidget": {
     "displayName": "Crew Chief",
-    "description": "Bar pill counts running Claude Code sessions and turns loud when one needs your permission or finished its run. The panel lists every session with project, state, and age — attention first.",
+    "description": "Bar pill counts running agent sessions and turns loud when one needs your input or finished its run. The panel lists every session with project, harness, state, and age — attention first. Ships adapters for Claude Code and Codex plus a one-command reporter for any other tool.",
     "category": "AI",
     "aliases": [
       "crew-chief",
-      "claude-sessions",
-      "agent-attention"
+      "agent-sessions",
+      "agent-attention",
+      "ai-fleet"
     ],
     "allowMultiple": false,
     "defaults": {
       "pollSec": 3,
       "staleMinutes": 240,
-      "showDone": "On"
+      "showDone": "On",
+      "herdrSync": "On"
     },
     "schema": [
       {
@@ -55,6 +57,17 @@
           "Off"
         ],
         "defaultValue": "On"
+      },
+      {
+        "key": "herdrSync",
+        "type": "enum",
+        "label": "Sync sessions from Herdr (when installed)",
+        "options": [
+          "On",
+          "Off"
+        ],
+        "defaultValue": "On",
+        "description": "When Herdr is installed, every agent pane it detects joins the fleet automatically — no hooks needed. Harmless no-op without Herdr."
       }
     ]
   }

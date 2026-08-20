@@ -28,7 +28,7 @@
   <text x="72" y="150" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="72" font-weight="700" letter-spacing="6" fill="#eef4ef">CREW CHIEF</text>
   <rect x="76" y="176" width="418" height="4" fill="url(#rule)"/>
   <text x="72" y="222" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="24" letter-spacing="1" fill="#bcc8bf">Your Claude Code sessions, watched from the bar.</text>
-  <text x="72" y="258" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="16" letter-spacing="1" fill="#84908a">every session · who's blocked on you · fed by hook events, not quota polls</text>
+  <text x="72" y="258" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="16" letter-spacing="1" fill="#84908a">every harness · every session · who's blocked on you — Claude Code, Codex, Goose, Kilo, pi, ...</text>
 
   <!-- Session rows mock, right side -->
   <g transform="translate(806,58)" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="17">

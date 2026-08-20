@@ -1,0 +1,47 @@
+#!/bin/bash
+# Crew Chief adapter for OpenAI Codex CLI.
+#
+# Codex invokes the configured notify program with one JSON argument. Wire it
+# in ~/.codex/config.toml:
+#
+#   notify = ["/absolute/path/to/adapters/codex-notify"]
+#
+# Codex's notify surface fires on turn completion, so this adapter can mark a
+# session done ("your move") — it cannot see permission prompts. For richer
+# states, also call crew-chief-report from a wrapper or shell integration.
+set -euo pipefail
+
+SPOOL="${CREW_CHIEF_SPOOL:-$HOME/.local/state/omarchy/crew-chief}"
+mkdir -p "$SPOOL"
+
+payload="${1:-}"
+[[ -n $payload ]] || payload=$(cat)
+
+type=$(jq -r '.type // empty' <<<"$payload" 2>/dev/null) || exit 0
+[[ -n $type ]] || exit 0
+
+# Stable per-conversation id when Codex provides one; else the notify
+# process's parent (the codex process itself).
+id=$(jq -r '."thread-id" // ."turn-id" // empty' <<<"$payload")
+[[ -n $id ]] || id="codex-$PPID"
+id="${id//[^A-Za-z0-9._-]/-}"
+
+cwd=$(jq -r '.cwd // empty' <<<"$payload")
+[[ -n $cwd ]] || cwd="$PWD"
+
+case "$type" in
+  agent-turn-complete) state="done" ;;
+  *) exit 0 ;;
+esac
+
+file="$SPOOL/$id.json"
+tmp="$file.tmp.$$"
+jq -cn \
+  --arg id "$id" \
+  --arg state "$state" \
+  --arg cwd "$cwd" \
+  --arg agent "codex" \
+  --arg message "" \
+  --argjson ts "$(date +%s%3N)" \
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' > "$tmp"
+mv -f "$tmp" "$file"

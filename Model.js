@@ -53,6 +53,7 @@ function parseSpool(raw) {
       state: STATE_ORDER[row.state] !== undefined ? row.state : "working",
       cwd: cwd,
       project: projectName(cwd),
+      agent: String(row.agent || ""),
       message: String(row.message || ""),
       ts: Number(row.ts) || 0
     })

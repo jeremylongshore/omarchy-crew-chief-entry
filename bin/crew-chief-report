@@ -1,0 +1,64 @@
+#!/bin/bash
+# Generic Crew Chief reporter — the one-command integration for ANY agent
+# harness. Wherever your tool can run a command on lifecycle events, call:
+#
+#   crew-chief-report working   [--agent goose] [--id ID] [--cwd DIR]
+#   crew-chief-report needs_you [--agent kilo]  [--message "waiting on approval"]
+#   crew-chief-report done      [--agent codex]
+#   crew-chief-report end       # session over -> row removed
+#
+# Defaults: --id falls back to $CREW_CHIEF_SESSION_ID, then the parent PID
+# (stable for the life of the harness process); --cwd falls back to $PWD;
+# --agent to $CREW_CHIEF_AGENT or "agent". Writes one compact JSON file per
+# session under the spool dir the Crew Chief bar widget watches. No network,
+# no daemon — the filesystem is the API. Protocol: docs/PROTOCOL.md.
+set -euo pipefail
+
+SPOOL="${CREW_CHIEF_SPOOL:-$HOME/.local/state/omarchy/crew-chief}"
+
+state="${1:-}"
+shift || true
+
+id="${CREW_CHIEF_SESSION_ID:-$PPID}"
+cwd="$PWD"
+agent="${CREW_CHIEF_AGENT:-agent}"
+message=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --id) id="$2"; shift 2 ;;
+    --cwd) cwd="$2"; shift 2 ;;
+    --agent) agent="$2"; shift 2 ;;
+    --message) message="$2"; shift 2 ;;
+    *) echo "crew-chief-report: unknown option $1" >&2; exit 2 ;;
+  esac
+done
+
+# Session ids become file names; refuse anything that could leave the spool.
+id="${id//[^A-Za-z0-9._-]/-}"
+[[ -n $id ]] || { echo "crew-chief-report: empty session id" >&2; exit 2; }
+
+case "$state" in
+  end|gone|removed)
+    rm -f "$SPOOL/$id.json"
+    exit 0
+    ;;
+  working|needs_you|done) ;;
+  *)
+    echo "crew-chief-report: state must be working|needs_you|done|end (got '${state:-}')" >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p "$SPOOL"
+file="$SPOOL/$id.json"
+tmp="$file.tmp.$$"
+jq -cn \
+  --arg id "$id" \
+  --arg state "$state" \
+  --arg cwd "$cwd" \
+  --arg agent "$agent" \
+  --arg message "$message" \
+  --argjson ts "$(date +%s%3N)" \
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' > "$tmp"
+mv -f "$tmp" "$file"

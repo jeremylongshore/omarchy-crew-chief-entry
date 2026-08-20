@@ -30,8 +30,12 @@ case "$event" in
   Notification)
     state="needs_you"
     ;;
-  Stop|SubagentStop)
+  Stop)
     state="done"
+    message=""
+    ;;
+  SubagentStop)
+    state="working"
     message=""
     ;;
   SessionStart|UserPromptSubmit|PreCompact|*)
@@ -47,7 +51,8 @@ jq -cn \
   --arg id "$session_id" \
   --arg state "$state" \
   --arg cwd "$cwd" \
+  --arg agent "claude-code" \
   --arg message "$message" \
   --argjson ts "$(date +%s%3N)" \
-  '{id:$id, state:$state, cwd:$cwd, message:$message, ts:$ts}' > "$tmp"
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' > "$tmp"
 mv -f "$tmp" "$file"

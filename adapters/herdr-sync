@@ -1,0 +1,56 @@
+#!/bin/bash
+# Crew Chief adapter for Herdr (terminal workspace manager for AI coding
+# agents). Zero configuration: when herdr is installed, every agent pane it
+# detects — Claude Code, Codex, Amp, Cline, Copilot, and the rest of its
+# detection roster — appears in the fleet with no hooks wired at all.
+#
+# Herdr's `agent list` is an authoritative snapshot, so unlike the event-fed
+# adapters this sync also REMOVES herdr-owned rows for panes that vanished.
+# Rows written by other adapters (claude hook, codex notify, the generic
+# reporter) are never touched — herdr rows are namespaced "herdr-*".
+#
+# Status mapping: blocked -> needs_you; working -> working; done and idle ->
+# done (either way, the ball is in your court); unknown -> working.
+set -euo pipefail
+
+SPOOL="${CREW_CHIEF_SPOOL:-$HOME/.local/state/omarchy/crew-chief}"
+
+command -v herdr >/dev/null 2>&1 || exit 0
+list=$(herdr agent list 2>/dev/null) || exit 0
+mkdir -p "$SPOOL"
+
+now=$(date +%s%3N)
+current_ids=""
+
+while IFS=$'\t' read -r agent status cwd tid title; do
+  [[ -n $tid ]] || continue
+  id="herdr-${tid//[^A-Za-z0-9._-]/-}"
+  case "$status" in
+    blocked) state="needs_you"; msg="$title" ;;
+    working) state="working"; msg="" ;;
+    done|idle) state="done"; msg="" ;;
+    *) state="working"; msg="" ;;
+  esac
+  file="$SPOOL/$id.json"
+  tmp="$file.tmp.$$"
+  jq -cn \
+    --arg id "$id" \
+    --arg state "$state" \
+    --arg cwd "$cwd" \
+    --arg agent "$agent" \
+    --arg message "$msg" \
+    --argjson ts "$now" \
+    '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' > "$tmp"
+  mv -f "$tmp" "$file"
+  current_ids="$current_ids $id"
+done < <(jq -r '.result.agents[]? | [.agent, .agent_status, .cwd, .terminal_id, (.terminal_title_stripped // "")] | @tsv' <<<"$list")
+
+# Herdr rows are a snapshot: drop the ones herdr no longer reports.
+for f in "$SPOOL"/herdr-*.json; do
+  [[ -e $f ]] || continue
+  base=$(basename "$f" .json)
+  case " $current_ids " in
+    *" $base "*) ;;
+    *) rm -f "$f" ;;
+  esac
+done

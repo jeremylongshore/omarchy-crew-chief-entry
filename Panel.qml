@@ -53,6 +53,10 @@ Panel {
   readonly property int pollSec: Math.max(1, parseInt(setting("pollSec", 3), 10) || 3)
   readonly property int staleMinutes: Math.max(30, parseInt(setting("staleMinutes", 240), 10) || 240)
   readonly property bool showDone: String(setting("showDone", "On")) !== "Off"
+  readonly property bool herdrSync: String(setting("herdrSync", "On")) !== "Off"
+
+  // Bundled herdr adapter, resolved relative to this plugin's directory.
+  readonly property string herdrAdapterPath: Qt.resolvedUrl("adapters/herdr-sync").toString().replace(/^file:\/\//, "")
 
   readonly property var liveList: Model.liveSessions(sessions, nowMs, staleMinutes * 60000)
   readonly property var visibleList: {
@@ -73,7 +77,7 @@ Panel {
   }
 
   readonly property string tooltip: summary.total === 0 ? "" :
-    summary.total + " Claude Code session" + (summary.total === 1 ? "" : "s")
+    summary.total + " agent session" + (summary.total === 1 ? "" : "s")
     + (summary.needs > 0 ? " · " + summary.needs + " waiting on you" : "")
 
   function refresh() {
@@ -97,8 +101,11 @@ Panel {
 
   Process {
     id: spoolProc
-    // cat the whole spool; each file is one compact JSON line.
-    command: ["bash", "-c", "cat " + spoolDir + "/*.json 2>/dev/null; true"]
+    // Optionally refresh herdr-detected sessions (self-noops without herdr),
+    // then cat the whole spool; each file is one compact JSON line.
+    command: ["bash", "-c",
+      (root.herdrSync ? "'" + root.herdrAdapterPath + "' 2>/dev/null; " : "")
+      + "cat " + spoolDir + "/*.json 2>/dev/null; true"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.sessions = Model.parseSpool(text)
@@ -166,7 +173,7 @@ Panel {
                 ? root.summary.needs + " WAITING ON YOU"
                 : root.summary.total + " ON TRACK")
             meta: root.summary.total === 0
-              ? "Start a Claude Code session and it reports in here."
+              ? "Wire a harness (Claude Code, Codex, Goose, ...) and sessions report in here."
               : root.summary.working + " working · " + root.summary.needs + " blocked · " + root.summary.done + " done"
             foreground: root.bar ? root.bar.foreground : Color.foreground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
@@ -246,6 +253,17 @@ Panel {
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.body
                     font.bold: row.blocked
+                  }
+
+                  Text {
+                    visible: modelData.agent !== ""
+                    anchors.left: projectText.right
+                    anchors.leftMargin: Style.space(8)
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData.agent
+                    color: Qt.darker(row.fg, 1.6)
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption
                   }
 
                   Text {
