@@ -1,0 +1,34 @@
+#!/bin/bash
+# Wire the Crew Chief spool writer into ~/.claude/settings.json.
+#
+# Adds crew-chief-event to the five lifecycle hooks the widget cares about.
+# Idempotent: running it twice leaves one entry per event. Backs up the
+# settings file first. Uses jq only — no other dependencies.
+set -euo pipefail
+
+HOOK_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/crew-chief-event"
+SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+
+[[ -x $HOOK_CMD ]] || { echo "hook script not executable: $HOOK_CMD" >&2; exit 1; }
+command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
+
+mkdir -p "$(dirname "$SETTINGS")"
+[[ -f $SETTINGS ]] || echo '{}' > "$SETTINGS"
+cp "$SETTINGS" "$SETTINGS.crew-chief.bak"
+
+jq --arg cmd "$HOOK_CMD" '
+  .hooks = (.hooks // {}) |
+  reduce ("SessionStart","UserPromptSubmit","Notification","Stop","SessionEnd") as $event (
+    .;
+    .hooks[$event] = (
+      ((.hooks[$event] // [])
+        | map(select((.hooks // []) | any(.command == $cmd) | not)))
+      + [{hooks: [{type: "command", command: $cmd}]}]
+    )
+  )
+' "$SETTINGS" > "$SETTINGS.tmp"
+mv "$SETTINGS.tmp" "$SETTINGS"
+
+echo "Crew Chief hooks installed into $SETTINGS"
+echo "Backup written to $SETTINGS.crew-chief.bak"
+echo "Restart running Claude Code sessions to pick them up."

@@ -1,0 +1,53 @@
+#!/bin/bash
+# Crew Chief spool writer — wired into Claude Code as a hook command.
+#
+# Claude Code invokes hooks with a JSON payload on stdin (session_id, cwd,
+# hook_event_name, message, ...). Each event updates one small JSON file per
+# session under the spool dir; the Crew Chief bar widget watches that dir.
+# No secrets, no transcript content — just enough state to route attention.
+#
+# Install (adds entries to ~/.claude/settings.json): hooks/install-claude-hooks
+set -euo pipefail
+
+SPOOL="${CREW_CHIEF_SPOOL:-$HOME/.local/state/omarchy/crew-chief}"
+mkdir -p "$SPOOL"
+
+payload=$(cat)
+
+session_id=$(jq -r '.session_id // empty' <<<"$payload")
+[[ -n $session_id ]] || exit 0
+event=$(jq -r '.hook_event_name // empty' <<<"$payload")
+cwd=$(jq -r '.cwd // empty' <<<"$payload")
+message=$(jq -r '.message // empty' <<<"$payload")
+
+file="$SPOOL/$session_id.json"
+
+case "$event" in
+  SessionEnd)
+    rm -f "$file"
+    exit 0
+    ;;
+  Notification)
+    state="needs_you"
+    ;;
+  Stop|SubagentStop)
+    state="done"
+    message=""
+    ;;
+  SessionStart|UserPromptSubmit|PreCompact|*)
+    state="working"
+    message=""
+    ;;
+esac
+
+# One compact JSON object per line so the widget can cat the whole spool and
+# parse line-wise. Atomic rename keeps the watcher from reading half a write.
+tmp="$file.tmp.$$"
+jq -cn \
+  --arg id "$session_id" \
+  --arg state "$state" \
+  --arg cwd "$cwd" \
+  --arg message "$message" \
+  --argjson ts "$(date +%s%3N)" \
+  '{id:$id, state:$state, cwd:$cwd, message:$message, ts:$ts}' > "$tmp"
+mv -f "$tmp" "$file"

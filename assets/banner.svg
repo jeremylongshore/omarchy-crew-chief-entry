@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="Crew Chief — The voice on the radio for your Claude Code fleet.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1210"/>
+      <stop offset="1" stop-color="#060a09"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.14" cy="0.1" r="0.6">
+      <stop offset="0" stop-color="#28c76f" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#28c76f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4ade80"/>
+      <stop offset="1" stop-color="#22a35c"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="340" fill="url(#bg)"/>
+  <rect width="1200" height="340" fill="url(#glow)"/>
+
+  <!-- Radio wave arcs, top right -->
+  <g stroke="#4ade80" fill="none" opacity="0.5" transform="translate(1080,74)">
+    <path d="M 0 0 a 26 26 0 0 1 0 36" stroke-width="3"/>
+    <path d="M 12 -14 a 46 46 0 0 1 0 64" stroke-width="3" opacity="0.6"/>
+    <path d="M 24 -28 a 66 66 0 0 1 0 92" stroke-width="3" opacity="0.35"/>
+  </g>
+
+  <!-- Title block -->
+  <text x="72" y="150" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="72" font-weight="700" letter-spacing="6" fill="#eef4ef">CREW CHIEF</text>
+  <rect x="76" y="176" width="418" height="4" fill="url(#rule)"/>
+  <text x="72" y="222" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="24" letter-spacing="1" fill="#bcc8bf">The voice on the radio for your Claude Code fleet.</text>
+  <text x="72" y="258" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="16" letter-spacing="1" fill="#84908a">every session · who's blocked on you · fed by hook events, not quota polls</text>
+
+  <!-- Session rows mock, right side -->
+  <g transform="translate(806,58)" font-family="'JetBrains Mono','Cascadia Mono',monospace" font-size="17">
+    <rect x="0" y="0" width="330" height="42" rx="8" fill="#0f1613" stroke="#26302a" stroke-width="1.5"/>
+    <circle cx="22" cy="21" r="5" fill="#ff5d5d">
+      <animate attributeName="opacity" values="1;0.25;1" dur="1.4s" repeatCount="indefinite"/>
+    </circle>
+    <text x="40" y="27" fill="#eef4ef">payments-api</text>
+    <text x="216" y="27" fill="#ff5d5d">NEEDS YOU</text>
+
+    <rect x="0" y="52" width="330" height="42" rx="8" fill="#0f1613" stroke="#26302a" stroke-width="1.5"/>
+    <circle cx="22" cy="73" r="5" fill="#eef4ef"/>
+    <text x="40" y="79" fill="#bcc8bf">marketing-site</text>
+    <text x="238" y="79" fill="#84908a">WORKING</text>
+
+    <rect x="0" y="104" width="330" height="42" rx="8" fill="#0f1613" stroke="#26302a" stroke-width="1.5"/>
+    <circle cx="22" cy="125" r="5" fill="#5a655f"/>
+    <text x="40" y="131" fill="#84908a">blog</text>
+    <text x="270" y="131" fill="#5a655f">DONE</text>
+  </g>
+</svg>

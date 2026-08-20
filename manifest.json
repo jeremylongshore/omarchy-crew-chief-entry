@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jeremylongshore.crew-chief",
+  "name": "Crew Chief",
+  "version": "1.0.0",
+  "author": "Jeremy Longshore",
+  "license": "MIT",
+  "description": "The voice on the radio for your Claude Code fleet: see every running session and get called in the moment one is blocked waiting on you.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Crew Chief",
+    "description": "Bar pill counts running Claude Code sessions and turns loud when one needs your permission or finished its run. The panel lists every session with project, state, and age — attention first.",
+    "category": "AI",
+    "aliases": ["crew-chief", "claude-sessions", "agent-attention"],
+    "allowMultiple": false,
+    "defaults": {
+      "pollSec": 3,
+      "staleMinutes": 240,
+      "showDone": "On"
+    },
+    "schema": [
+      { "key": "pollSec", "type": "integer", "label": "Spool poll interval (seconds)", "min": 1, "max": 30, "step": 1, "defaultValue": 3 },
+      { "key": "staleMinutes", "type": "integer", "label": "Forget sessions after (minutes)", "min": 30, "max": 1440, "step": 30, "defaultValue": 240 },
+      { "key": "showDone", "type": "enum", "label": "Show finished sessions", "options": ["On", "Off"], "defaultValue": "On" }
+    ]
+  }
+}
