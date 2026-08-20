@@ -2,7 +2,8 @@
 
 # Crew Chief
 
-The voice on the radio for your Claude Code fleet.
+Every running Claude Code session in your Omarchy bar — and a loud pill the moment one
+is blocked waiting on you.
 
 You're running four agent sessions across four projects. One of them has been sitting on a
 permission prompt for six minutes. Which one? Crew Chief knows: a bar pill counts your
