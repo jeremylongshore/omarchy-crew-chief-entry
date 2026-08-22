@@ -249,6 +249,13 @@ Panel {
                     anchors.left: stateDot.right
                     anchors.leftMargin: Style.space(10)
                     text: modelData.project || modelData.id.substring(0, 8)
+                    // A project name is written by whoever ran the agent, so it
+                    // is unbounded input on a fixed-width bar row. Cap it and
+                    // elide. Math.min keeps short names rendering at their
+                    // natural width, so nothing about the common case moves.
+                    textFormat: Text.PlainText
+                    width: Math.min(implicitWidth, parent.width * 0.45)
+                    elide: Text.ElideRight
                     color: row.fg
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.body
@@ -261,6 +268,9 @@ Panel {
                     anchors.leftMargin: Style.space(8)
                     anchors.verticalCenter: parent.verticalCenter
                     text: modelData.agent
+                    textFormat: Text.PlainText
+                    width: Math.min(implicitWidth, parent.width * 0.25)
+                    elide: Text.ElideRight
                     color: Qt.darker(row.fg, 1.6)
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption
@@ -271,6 +281,9 @@ Panel {
                     anchors.rightMargin: Style.space(10)
                     anchors.verticalCenter: parent.verticalCenter
                     text: Model.stateLabel(modelData.state)
+                    textFormat: Text.PlainText
+                    width: Math.min(implicitWidth, parent.width * 0.2)
+                    elide: Text.ElideRight
                     color: row.blocked ? (root.bar ? root.bar.urgent : Color.urgent) : Qt.darker(row.fg, 1.4)
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption
@@ -282,6 +295,9 @@ Panel {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: Model.ageText(modelData.ts, root.nowMs)
+                    textFormat: Text.PlainText
+                    width: Math.min(implicitWidth, parent.width * 0.15)
+                    elide: Text.ElideRight
                     color: Qt.darker(row.fg, 1.5)
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption
@@ -293,6 +309,7 @@ Panel {
                   width: parent.width
                   leftPadding: Style.space(18)
                   text: modelData.message
+                  textFormat: Text.PlainText
                   color: Qt.darker(row.fg, 1.3)
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.bodySmall

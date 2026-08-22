@@ -1,6 +1,6 @@
 # The Crew Chief spool protocol (v1)
 
-Crew Chief is harness-agnostic by design. The widget never talks to any agent tool —
+Crew Chief is harness-agnostic by design. The widget never talks to any agent tool.
 it watches a spool directory of tiny JSON files, one per session. **Anything that can
 run a command or write a file can appear in the fleet.**
 
@@ -48,11 +48,11 @@ crew-chief-report end
 
 Ids default to the parent PID (stable for the harness process lifetime), so most
 integrations need zero plumbing: just call it from whatever event surface your harness
-has — hooks, notify programs, wrappers, extensions.
+has: hooks, notify programs, wrappers, extensions.
 
 ## Semantics
 
-- `needs_you` — the agent is blocked on a human: permission prompt, approval, question.
-- `working` — running; nothing needed.
-- `done` — the agent finished its turn/run; the ball is in your court.
+- `needs_you`: the agent is blocked on a human: permission prompt, approval, question.
+- `working`: running; nothing needed.
+- `done`: the agent finished its turn/run; the ball is in your court.
 - States are last-writer-wins per session; there is no ordering requirement beyond `ts`.

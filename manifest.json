@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Jeremy Longshore",
   "license": "MIT",
-  "description": "See every running AI coding agent session in the Omarchy bar — Claude Code, Codex, Goose, Kilo, pi, any harness — and get alerted the moment one is blocked waiting on your input.",
+  "description": "See every running AI coding agent session in the Omarchy bar. Claude Code, Codex, Goose, Kilo, pi, any harness. Get alerted the moment one is blocked waiting on your input.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Crew Chief",
-    "description": "Bar pill counts running agent sessions and turns loud when one needs your input or finished its run. The panel lists every session with project, harness, state, and age — attention first. Ships adapters for Claude Code and Codex plus a one-command reporter for any other tool.",
+    "description": "Bar pill counts running agent sessions and turns loud when one needs your input or finished its run. The panel lists every session with project, harness, state, and age, attention first. Ships adapters for Claude Code and Codex plus a one-command reporter for any other tool.",
     "category": "AI",
     "aliases": [
       "crew-chief",
@@ -67,7 +67,7 @@
           "Off"
         ],
         "defaultValue": "On",
-        "description": "When Herdr is installed, every agent pane it detects joins the fleet automatically — no hooks needed. Harmless no-op without Herdr."
+        "description": "When Herdr is installed, every agent pane it detects joins the fleet automatically, no hooks needed. Harmless no-op without Herdr."
       }
     ]
   }
