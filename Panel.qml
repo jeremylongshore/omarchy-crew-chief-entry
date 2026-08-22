@@ -47,6 +47,14 @@ Panel {
 
   readonly property string spoolDir: Quickshell.env("HOME") + "/.local/state/omarchy/crew-chief"
 
+  // Set when the last read hit a bound, so the hero can say the fleet shown is
+  // partial instead of pretending it is complete.
+  property bool spoolTruncated: false
+
+  // How many sessions exist that the bounded reader did not return, so the hero
+  // can name the gap instead of hinting at one.
+  property int spoolHidden: 0
+
   property var sessions: []
   property double nowMs: Date.now()
 
@@ -102,13 +110,35 @@ Panel {
   Process {
     id: spoolProc
     // Optionally refresh herdr-detected sessions (self-noops without herdr),
-    // then cat the whole spool; each file is one compact JSON line.
+    // then read a BOUNDED slice of the spool.
+    //
+    // This used to be `cat <spool>/*.json`, with no limit on how many files it
+    // read or how large any of them were. The spool is written by agents, and
+    // this plugin advertises that anything able to run a command may write to
+    // it, so its size is not under this widget's control. A long-lived shell
+    // process reading it every few seconds is exactly where unbounded growth
+    // becomes a memory problem. Reported against submission 1436.
+    //
+    // Bounded three ways now: the newest MAX_SPOOL_FILES files only, at most
+    // MAX_FILE_BYTES from each, and Model.parseSpool caps again on the way in.
+    // The newest-first ordering means an overflowing spool loses the stalest
+    // rows, which are the ones that age out anyway.
     command: ["bash", "-c",
       (root.herdrSync ? "'" + root.herdrAdapterPath + "' 2>/dev/null; " : "")
-      + "cat " + spoolDir + "/*.json 2>/dev/null; true"]
+      + "cd '" + spoolDir + "' 2>/dev/null || exit 0; "
+      // Census first: how many files EXIST, not how many are about to be read.
+      // The parser cannot otherwise tell that the reader dropped anything, so
+      // without this the truncation notice could never fire.
+      + "printf '{\"__spoolTotal\":%s}\\n' $(ls -1 -- *.json 2>/dev/null | wc -l); "
+      + "ls -1t -- *.json 2>/dev/null | head -n " + Model.MAX_SPOOL_FILES + " | "
+      + "while IFS= read -r f; do head -c " + Model.MAX_FILE_BYTES + " -- \"$f\" 2>/dev/null; printf '\\n'; done; true"]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.sessions = Model.parseSpool(text)
+      onStreamFinished: {
+        root.sessions = Model.parseSpool(text)
+        root.spoolTruncated = Model.spoolTruncated()
+        root.spoolHidden = Math.max(0, Model.spoolTotal() - root.sessions.length)
+      }
     }
   }
 
@@ -172,9 +202,18 @@ Panel {
               : (root.summary.needs > 0
                 ? root.summary.needs + " WAITING ON YOU"
                 : root.summary.total + " ON TRACK")
+            // A truncated fleet is said out loud. Silently showing a partial
+            // list would be a worse bug than the unbounded read it replaced:
+            // this widget's whole claim is that it shows you everything that is
+            // waiting on you, so quietly dropping rows breaks the promise while
+            // looking healthy.
             meta: root.summary.total === 0
               ? "Wire a harness (Claude Code, Codex, Goose, ...) and sessions report in here."
-              : root.summary.working + " working · " + root.summary.needs + " blocked · " + root.summary.done + " done"
+              : (root.summary.working + " working · " + root.summary.needs + " blocked · "
+                 + root.summary.done + " done"
+                 + (root.spoolTruncated && root.spoolHidden > 0
+                    ? "  ·  +" + root.spoolHidden + " not shown"
+                    : ""))
             foreground: root.bar ? root.bar.foreground : Color.foreground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
 

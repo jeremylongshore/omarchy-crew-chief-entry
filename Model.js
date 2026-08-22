@@ -40,8 +40,76 @@ function splitJsonObjects(raw) {
 }
 
 // Unparseable chunks are dropped, never fatal.
+// Hard bounds on everything that enters from the spool.
+//
+// The spool is written by AGENTS, not by this plugin: any harness that can run a
+// command can drop a file in it, and Crew Chief advertises exactly that as a
+// feature. So its size is attacker-or-bug controlled, and this widget lives
+// inside a long-running shell process that must never grow without limit.
+//
+// Reported against submission 1436: Panel.qml cat'd every spool file into a
+// StdioCollector every few seconds with no file-count or byte bound.
+//
+// 64 concurrent agent sessions is already an absurd fleet, and one session
+// record is a single compact JSON line, so 4 KB each is generous. The two
+// numbers multiply to the character cap, and the cap is enforced HERE as well
+// as in the shell command, because a bound that exists in only one layer is a
+// bound that a refactor can delete by accident.
+var MAX_SPOOL_FILES = 64
+var MAX_FILE_BYTES = 4096
+var MAX_SPOOL_CHARS = MAX_SPOOL_FILES * MAX_FILE_BYTES
+var MAX_SESSIONS = 64
+
+// True when the last parse hit a limit, so the panel can say so rather than
+// silently showing a partial fleet.
+//
+// Declared as a top-level function, NOT as an anonymous one attached to
+// module.exports. QML's `import "Model.js" as Model` exposes top-level function
+// declarations and top-level vars; it does not evaluate module.exports, which
+// only exists for node. An exports-only definition therefore passes every
+// offline test and then throws "Property is not a function" inside the shell,
+// which is exactly what happened here and what the rig render caught.
+var lastParseTruncated = false
+var lastSpoolTotal = 0
+
+function spoolTruncated() {
+  return lastParseTruncated
+}
+
+// How many spool files exist, from the census, so the panel can say how many it
+// is NOT showing rather than only that it is showing some.
+function spoolTotal() {
+  return lastSpoolTotal
+}
+
+// The reader emits a census line before the records: {"__spoolTotal":N}, the
+// number of files that EXIST, not the number it read.
+//
+// Without it the truncation notice could never fire in practice. The bound that
+// actually bites is the shell one (newest N files), and the parser cannot see
+// what the shell chose not to send: under a 401-file flood the parser received
+// 64 well-formed chunks, decided nothing had been dropped, and the panel
+// cheerfully reported a complete fleet that was missing 337 sessions. A UI
+// claim that can never fire is worse than no claim.
+function spoolCensus(text) {
+  var m = /\{"__spoolTotal":\s*(\d+)\}/.exec(String(text || ""))
+  return m ? parseInt(m[1], 10) : -1
+}
+
 function parseSpool(raw) {
-  var chunks = splitJsonObjects(raw)
+  lastParseTruncated = false
+  var text = String(raw || "")
+  var total = spoolCensus(text)
+  lastSpoolTotal = total > 0 ? total : 0
+  if (text.length > MAX_SPOOL_CHARS) {
+    text = text.slice(0, MAX_SPOOL_CHARS)
+    lastParseTruncated = true
+  }
+  var chunks = splitJsonObjects(text)
+  if (chunks.length > MAX_SESSIONS) {
+    chunks = chunks.slice(0, MAX_SESSIONS)
+    lastParseTruncated = true
+  }
   var sessions = []
   for (var i = 0; i < chunks.length; i++) {
     var row
@@ -58,6 +126,9 @@ function parseSpool(raw) {
       ts: Number(row.ts) || 0
     })
   }
+  // The census counts FILES that exist; a valid session is one file, so a
+  // census above what we built means the reader dropped some.
+  if (total > sessions.length) lastParseTruncated = true
   return sessions
 }
 
@@ -132,6 +203,13 @@ function ageText(ts, nowMs) {
 if (typeof module !== "undefined") {
   module.exports = {
     splitJsonObjects: splitJsonObjects,
+    MAX_SPOOL_FILES: MAX_SPOOL_FILES,
+    MAX_FILE_BYTES: MAX_FILE_BYTES,
+    MAX_SPOOL_CHARS: MAX_SPOOL_CHARS,
+    MAX_SESSIONS: MAX_SESSIONS,
+    spoolTruncated: spoolTruncated,
+    spoolCensus: spoolCensus,
+    spoolTotal: spoolTotal,
     parseSpool: parseSpool,
     projectName: projectName,
     liveSessions: liveSessions,

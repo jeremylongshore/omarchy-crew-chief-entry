@@ -89,3 +89,53 @@ test("stateLabel and ageText render row chrome", () => {
   assert.equal(Model.ageText(NOW - 2 * 3_600_000, NOW), "2h")
   assert.equal(Model.ageText(NOW - 30 * 3_600_000, NOW), "1d")
 })
+
+// ------------------------------------------------------ spool bounds (1436)
+
+test("parseSpool caps the number of sessions it will build", () => {
+  // The spool is written by AGENTS. This plugin advertises that anything able
+  // to run a command may write to it, so its size is not under the widget's
+  // control, and the widget lives in a long-running shell that must never grow
+  // without limit. Reported against submission 1436.
+  const many = Array.from({ length: 500 }, (_, i) =>
+    JSON.stringify({ id: "s" + i, state: "working", cwd: "/p", ts: 1 })).join("\n")
+  const rows = Model.parseSpool(many)
+  assert.equal(rows.length, Model.MAX_SESSIONS)
+  assert.equal(Model.spoolTruncated(), true)
+})
+
+test("parseSpool caps total input characters", () => {
+  const one = JSON.stringify({ id: "a", state: "working", cwd: "/x", ts: 1 }) + "\n"
+  const huge = one.repeat(200000)
+  assert.ok(huge.length > Model.MAX_SPOOL_CHARS)
+  const rows = Model.parseSpool(huge)
+  assert.ok(rows.length <= Model.MAX_SESSIONS)
+  assert.equal(Model.spoolTruncated(), true)
+})
+
+test("a normal spool is not reported as truncated", () => {
+  // The flag must mean something, so it has to be false in the common case.
+  const few = Array.from({ length: 3 }, (_, i) =>
+    JSON.stringify({ id: "s" + i, state: "working", cwd: "/p", ts: 1 })).join("\n")
+  assert.equal(Model.parseSpool(few).length, 3)
+  assert.equal(Model.spoolTruncated(), false)
+})
+
+test("the spool bounds are consistent with each other", () => {
+  assert.equal(Model.MAX_SPOOL_CHARS, Model.MAX_SPOOL_FILES * Model.MAX_FILE_BYTES)
+  for (const n of [Model.MAX_SPOOL_FILES, Model.MAX_FILE_BYTES, Model.MAX_SESSIONS]) {
+    assert.ok(Number.isInteger(n) && n > 0)
+  }
+})
+
+test("parseSpool survives a mid-file truncation without leaking garbage", () => {
+  // head -c cuts mid-file, so a partial JSON line reaching the parser is the
+  // NORMAL case under the new bounds rather than an edge case.
+  const partial = '{"id":"a","state":"working","cwd":"/x","ts":1}\n{"id":"b","st'
+  const rows = Model.parseSpool(partial)
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].id, "a")
+  for (const bad of ["", null, undefined, "not json", "  "]) {
+    assert.ok(Array.isArray(Model.parseSpool(bad)))
+  }
+})
