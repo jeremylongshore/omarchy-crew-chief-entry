@@ -18,6 +18,8 @@ prompt it's stuck on.
 The existing agent widgets tell you about your *quota*. Crew Chief tells you **who needs
 you right now**, fed by each harness's own lifecycle events, not by polling a usage API.
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
+
 ## Works with every make and model
 
 Crew Chief is harness-agnostic by design: the widget watches a spool of tiny JSON state
