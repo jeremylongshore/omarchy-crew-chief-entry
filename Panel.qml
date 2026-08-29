@@ -65,6 +65,10 @@ Panel {
 
   // Bundled herdr adapter, resolved relative to this plugin's directory.
   readonly property string herdrAdapterPath: Qt.resolvedUrl("adapters/herdr-sync").toString().replace(/^file:\/\//, "")
+  // Keep the bounded spool scan in a bundled executable. Passing these as
+  // Process argv entries—not through `bash -c`—means an apostrophe in HOME or
+  // a path can never alter the command that reads the session spool.
+  readonly property string spoolReaderPath: Qt.resolvedUrl("bin/read-spool").toString().replace(/^file:\/\//, "")
 
   readonly property var liveList: Model.liveSessions(sessions, nowMs, staleMinutes * 60000)
   readonly property var visibleList: {
@@ -107,6 +111,15 @@ Panel {
       if (rows[i].state === "done") dismiss(rows[i].id)
   }
 
+  // Project labels originate in hook-written records. Give hyprctl one argv
+  // item so quotes and shell metacharacters remain literal title text.
+  function focusProject(project) {
+    var target = Model.focusTarget(project)
+    if (target === "" || focusProc.running) return
+    focusProc.command = ["hyprctl", "dispatch", "focuswindow", "title:" + target]
+    focusProc.running = true
+  }
+
   Process {
     id: spoolProc
     // Optionally refresh herdr-detected sessions (self-noops without herdr),
@@ -123,15 +136,8 @@ Panel {
     // MAX_FILE_BYTES from each, and Model.parseSpool caps again on the way in.
     // The newest-first ordering means an overflowing spool loses the stalest
     // rows, which are the ones that age out anyway.
-    command: ["bash", "-c",
-      (root.herdrSync ? "'" + root.herdrAdapterPath + "' 2>/dev/null; " : "")
-      + "cd '" + spoolDir + "' 2>/dev/null || exit 0; "
-      // Census first: how many files EXIST, not how many are about to be read.
-      // The parser cannot otherwise tell that the reader dropped anything, so
-      // without this the truncation notice could never fire.
-      + "printf '{\"__spoolTotal\":%s}\\n' $(ls -1 -- *.json 2>/dev/null | wc -l); "
-      + "ls -1t -- *.json 2>/dev/null | head -n " + Model.MAX_SPOOL_FILES + " | "
-      + "while IFS= read -r f; do head -c " + Model.MAX_FILE_BYTES + " -- \"$f\" 2>/dev/null; printf '\\n'; done; true"]
+    command: [root.spoolReaderPath, spoolDir,
+      root.herdrSync ? root.herdrAdapterPath : ""]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -146,6 +152,8 @@ Panel {
     id: dismissProc
     onExited: root.refresh()
   }
+
+  Process { id: focusProc }
 
   Timer {
     interval: root.pollSec * 1000
@@ -370,7 +378,7 @@ Panel {
                   }
                   // Best-effort jump to the terminal running this project.
                   if (root.bar && row.modelData.project !== "")
-                    root.bar.run("hyprctl dispatch focuswindow 'title:" + row.modelData.project + "'")
+                    root.focusProject(row.modelData.project)
                 }
               }
             }

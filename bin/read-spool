@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Emit a bounded, newest-first view of Crew Chief's local session spool.
+#
+# This program is intentionally a separate executable so Quickshell's Process
+# can pass directory and adapter paths as argv. Do not fold it into `bash -c`
+# in Panel.qml: shell interpolation there made ordinary apostrophes in HOME
+# break the refresh command.
+set -euo pipefail
+
+spool_dir="${1:-}"
+adapter="${2:-}"
+max_files=64
+max_bytes=4096
+
+if [[ -n "$adapter" && -x "$adapter" ]]; then
+  "$adapter" 2>/dev/null || true
+fi
+
+if [[ -z "$spool_dir" || ! -d "$spool_dir" ]]; then
+  printf '{"__spoolTotal":0}\n'
+  exit 0
+fi
+
+# The census says how many candidate records exist even when the bounded view
+# below reads only the newest ones. NUL delimiters preserve spaces and quotes.
+total="$(find "$spool_dir" -maxdepth 1 -type f -name '*.json' -printf . 2>/dev/null | wc -c)"
+printf '{"__spoolTotal":%s}\n' "$total"
+
+shown=0
+while IFS= read -r -d '' entry; do
+  [[ "$shown" -lt "$max_files" ]] || break
+  file="${entry#*:}"
+  name="${file##*/}"
+  # Hook ids are constrained to this exact filename alphabet. Ignoring files
+  # outside it avoids treating arbitrary spool-directory debris as sessions.
+  [[ "$name" =~ ^[A-Za-z0-9._-]+\.json$ ]] || continue
+  head -c "$max_bytes" -- "$file" 2>/dev/null || true
+  printf '\n'
+  shown=$((shown + 1))
+done < <(find "$spool_dir" -maxdepth 1 -type f -name '*.json' -printf '%T@:%p\0' 2>/dev/null | sort -z -nr)

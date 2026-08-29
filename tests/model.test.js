@@ -1,5 +1,9 @@
 const test = require("node:test")
 const assert = require("node:assert/strict")
+const { mkdtempSync, writeFileSync, rmSync } = require("node:fs")
+const { tmpdir } = require("node:os")
+const { join } = require("node:path")
+const { spawnSync } = require("node:child_process")
 
 const Model = require("../Model.js")
 
@@ -52,6 +56,28 @@ test("projectName takes the last path segment", () => {
   assert.equal(Model.projectName("/a/b/c"), "c")
   assert.equal(Model.projectName("/a/b/c///"), "c")
   assert.equal(Model.projectName(""), "")
+})
+
+test("focusTarget retains literal punctuation but rejects control characters", () => {
+  assert.equal(Model.focusTarget("repo'; touch /tmp/nope; #"), "repo'; touch /tmp/nope; #")
+  assert.equal(Model.focusTarget("  spaced repo  "), "spaced repo")
+  assert.equal(Model.focusTarget("bad\nselector"), "")
+  assert.equal(Model.focusTarget(""), "")
+})
+
+test("bounded spool reader accepts an apostrophe in its directory as argv", () => {
+  const dir = mkdtempSync(join(tmpdir(), "crew chief's spool-"))
+  try {
+    writeFileSync(join(dir, "safe.json"), JSON.stringify({ id: "safe", state: "working" }))
+    const result = spawnSync(join(__dirname, "..", "bin", "read-spool"), [dir, ""], {
+      encoding: "utf8"
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /"__spoolTotal":1/)
+    assert.match(result.stdout, /"id":"safe"/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test("liveSessions drops stale entries", () => {

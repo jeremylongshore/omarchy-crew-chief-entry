@@ -141,6 +141,16 @@ function projectName(cwd) {
   return parts[parts.length - 1] || ""
 }
 
+// `focuswindow title:` is passed to hyprctl as one process argument. Keep
+// control characters out of that selector and cap an untrusted hook label to
+// the same fixed-width intent as the UI; punctuation is deliberately allowed
+// because argv transport makes it data rather than shell syntax.
+function focusTarget(project) {
+  var value = String(project || "").trim()
+  if (!value || /[\x00-\x1F\x7F]/.test(value)) return ""
+  return value.slice(0, 120)
+}
+
 // Sessions with no event inside staleMs are treated as gone (crashed shell,
 // old machine boot) and dropped from every surface.
 function liveSessions(sessions, nowMs, staleMs) {
@@ -212,6 +222,7 @@ if (typeof module !== "undefined") {
     spoolTotal: spoolTotal,
     parseSpool: parseSpool,
     projectName: projectName,
+    focusTarget: focusTarget,
     liveSessions: liveSessions,
     sortSessions: sortSessions,
     summarize: summarize,
