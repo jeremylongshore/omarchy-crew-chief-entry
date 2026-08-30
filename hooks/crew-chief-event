@@ -4,27 +4,28 @@
 # Claude Code invokes hooks with a JSON payload on stdin (session_id, cwd,
 # hook_event_name, message, ...). Each event updates one small JSON file per
 # session under the spool dir; the Crew Chief bar widget watches that dir.
-# No secrets, no transcript content — just enough state to route attention.
+# The optional message is persisted locally. Reporters must provide only a
+# short attention headline, never a secret or transcript excerpt.
 #
 # Install (adds entries to ~/.claude/settings.json): hooks/install-claude-hooks
 set -euo pipefail
 
-SPOOL="${CREW_CHIEF_SPOOL:-$HOME/.local/state/omarchy/crew-chief}"
-mkdir -p "$SPOOL"
+SPOOL="${CREW_CHIEF_SPOOL:-}"
+SPOOL_HELPER="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/crew-chief-spool"
+[[ -x $SPOOL_HELPER ]] || exit 0
 
-payload=$(cat)
+payload="$(head -c 16385)"
+[[ ${#payload} -le 16384 ]] || exit 0
 
-session_id=$(jq -r '.session_id // empty' <<<"$payload")
-[[ -n $session_id ]] || exit 0
-event=$(jq -r '.hook_event_name // empty' <<<"$payload")
-cwd=$(jq -r '.cwd // empty' <<<"$payload")
-message=$(jq -r '.message // empty' <<<"$payload")
-
-file="$SPOOL/$session_id.json"
+session_id=$(timeout 2 jq -r '.session_id // empty' <<<"$payload" 2>/dev/null) || exit 0
+[[ $session_id =~ ^[A-Za-z0-9._-]{1,128}$ ]] || exit 0
+event=$(timeout 2 jq -r '.hook_event_name // empty' <<<"$payload" 2>/dev/null) || exit 0
+cwd=$(timeout 2 jq -r '.cwd // empty' <<<"$payload" 2>/dev/null) || exit 0
+message=$(timeout 2 jq -r '.message // empty' <<<"$payload" 2>/dev/null) || exit 0
 
 case "$event" in
   SessionEnd)
-    rm -f "$file"
+    "$SPOOL_HELPER" remove "$SPOOL" "$session_id"
     exit 0
     ;;
   Notification)
@@ -44,9 +45,8 @@ case "$event" in
     ;;
 esac
 
-# One compact JSON object per line so the widget can cat the whole spool and
-# parse line-wise. Atomic rename keeps the watcher from reading half a write.
-tmp="$file.tmp.$$"
+# The secure-state helper pins the parent directory, keeps an exclusive
+# O_NOFOLLOW temporary descriptor through fsync, and publishes atomically.
 jq -cn \
   --arg id "$session_id" \
   --arg state "$state" \
@@ -54,5 +54,5 @@ jq -cn \
   --arg agent "claude-code" \
   --arg message "$message" \
   --argjson ts "$(date +%s%3N)" \
-  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' > "$tmp"
-mv -f "$tmp" "$file"
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' \
+  | "$SPOOL_HELPER" write "$SPOOL" "$session_id"

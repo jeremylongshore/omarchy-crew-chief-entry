@@ -14,7 +14,10 @@
 # no daemon — the filesystem is the API. Protocol: docs/PROTOCOL.md.
 set -euo pipefail
 
-SPOOL="${CREW_CHIEF_SPOOL:-$HOME/.local/state/omarchy/crew-chief}"
+SPOOL="${CREW_CHIEF_SPOOL:-}"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SPOOL_HELPER="$SELF_DIR/crew-chief-spool"
+[[ -x $SPOOL_HELPER ]] || { echo "crew-chief-report: spool helper missing" >&2; exit 1; }
 
 state="${1:-}"
 shift || true
@@ -40,7 +43,7 @@ id="${id//[^A-Za-z0-9._-]/-}"
 
 case "$state" in
   end|gone|removed)
-    rm -f "$SPOOL/$id.json"
+    "$SPOOL_HELPER" remove "$SPOOL" "$id"
     exit 0
     ;;
   working|needs_you|done) ;;
@@ -50,9 +53,8 @@ case "$state" in
     ;;
 esac
 
-mkdir -p "$SPOOL"
-file="$SPOOL/$id.json"
-tmp="$file.tmp.$$"
+# secure-state owns private creation, bounded validation, locking, retention,
+# no-follow publication, and descriptor-relative cleanup.
 jq -cn \
   --arg id "$id" \
   --arg state "$state" \
@@ -60,5 +62,5 @@ jq -cn \
   --arg agent "$agent" \
   --arg message "$message" \
   --argjson ts "$(date +%s%3N)" \
-  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' > "$tmp"
-mv -f "$tmp" "$file"
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' \
+  | "$SPOOL_HELPER" write "$SPOOL" "$id"

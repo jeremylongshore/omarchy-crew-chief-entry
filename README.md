@@ -8,10 +8,10 @@ pill the moment one is blocked waiting on you.
 You're running four agent sessions across four projects. Maybe Claude Code in two,
 Codex in one, Goose in another. One of them has been sitting on a permission prompt for
 six minutes. Which one? Crew Chief knows. A bar pill counts your running sessions,
-`󰋎 4`, and the moment a session is blocked waiting on you or finishes its run, the pill
-goes loud in your theme's active color: `󰋎 2 need you`. The panel lists the whole fleet,
-attention first: project, harness, state, how long it's been waiting, and the actual
-prompt it's stuck on.
+`󰋎 4`, and the moment a session is blocked waiting on you, the pill goes loud in
+your theme's active color: `󰋎 2 need you`. The panel lists the whole fleet,
+attention first: project, harness, state, how long it's been waiting, and the
+capped attention headline its reporter supplied.
 
 ![Crew Chief preview](preview.png)
 
@@ -28,7 +28,7 @@ in. Three integration tiers:
 
 | Harness | Integration | States you get |
 | --- | --- | --- |
-| **Anything running under [Herdr](https://herdr.dev)**, whose detection roster covers Claude Code, Codex, Amp, Cline, Copilot, and more | **zero config**: when `herdr` is installed, the widget snapshots `herdr agent list` on every poll (`herdrSync` setting, default On, harmless no-op without it) | working / needs you (blocked) / done, with the pane title as context |
+| **Anything running under [Herdr](https://herdr.dev)**, whose detection roster covers Claude Code, Codex, Amp, Cline, Copilot, and more | **zero config**: when `herdr` is installed, the widget consumes one bounded `herdr status --json` snapshot per poll (`herdrSync` setting, default On, harmless no-op without it) | working / needs you (blocked) / done, with the pane title as context |
 | **Claude Code** (standalone) | first-class hook adapter, one-command install (below) | working / needs you / done, with the blocking prompt |
 | **OpenAI Codex** (standalone) | `adapters/codex-notify` wired into `notify` in `~/.codex/config.toml` | done (turn complete) |
 | **Goose, Kilo, pi, Hermes, aider, opencode, anything** | call `bin/crew-chief-report` from whatever event surface your tool has: hooks, notify programs, wrappers, extensions | whatever you report |
@@ -65,7 +65,9 @@ For Claude Code (one command, idempotent, backs up your settings first):
 ```
 
 Restart any running Claude Code sessions so they pick up the hooks. That's it. New
-sessions report in automatically.
+sessions report in automatically. Reporter messages are persisted locally and
+rendered in the panel, so adapters should send an attention headline, never a
+secret or transcript excerpt.
 
 For Codex, point `notify` at the adapter in `~/.codex/config.toml`:
 
@@ -92,9 +94,12 @@ tiny JSON state file per session under `~/.local/state/omarchy/crew-chief/`:
 Every other harness reaches the same spool through its own adapter or the generic
 reporter. The widget treats all makes and models identically.
 
-The widget polls that spool (default every 3s, a handful of local files, effectively
-free) and renders the fleet. No network. No transcript content. No secrets. The spool
-carries session id, project directory, state, timestamp, and the notification headline.
+The widget polls that spool (default every 3s) and renders the fleet. No network,
+account, API key, telemetry, or transcript polling. The spool carries a bounded
+session id, project directory, harness, state, timestamp, and optional attention
+headline. The writer retains at most 256 records; each read examines at most 1,024
+candidate names, opens only regular same-owner files without following links, reads
+4 KiB per file, and returns at most the newest 64 sessions.
 
 ## Using the panel
 
@@ -134,11 +139,20 @@ To unwire the hook, restore the backup the installer made
 
 ## Development
 
-Data layer and hook script are covered by a node test suite (no QML required):
+The offline lane covers model behavior, hooks, every adapter, descriptor-bound
+state races, accessibility, exact marketplace copy, coverage, mutation, and
+presentation contracts:
 
 ```bash
-node --test tests/*.test.js
+npm ci
+npm test
+npm run test:race
+npm run test:mutation
+npm run audit
 ```
+
+`npm run test:e2e` performs validator, qmllint, and live-shell rendering on
+the configured Buzz Omarchy rig.
 
 ## License
 

@@ -1,2 +1,11 @@
 node_modules/
+coverage/
+reports/
+.stryker-tmp/
+render.png
+render-check.png
+*.tgz
+*.tmp
+*.swp
+.DS_Store
 *.log

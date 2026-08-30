@@ -1,0 +1,3 @@
+# Crew Chief is a QML frontend with JavaScript model and shell/Perl adapters.
+classify_pins:
+  - frontend

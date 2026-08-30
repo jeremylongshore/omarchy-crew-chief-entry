@@ -11,22 +11,24 @@
 # states, also call crew-chief-report from a wrapper or shell integration.
 set -euo pipefail
 
-SPOOL="${CREW_CHIEF_SPOOL:-$HOME/.local/state/omarchy/crew-chief}"
-mkdir -p "$SPOOL"
+SPOOL="${CREW_CHIEF_SPOOL:-}"
+SPOOL_HELPER="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/crew-chief-spool"
+[[ -x $SPOOL_HELPER ]] || exit 0
 
 payload="${1:-}"
-[[ -n $payload ]] || payload=$(cat)
+[[ -n $payload ]] || payload="$(head -c 16385)"
+[[ ${#payload} -le 16384 ]] || exit 0
 
-type=$(jq -r '.type // empty' <<<"$payload" 2>/dev/null) || exit 0
+type=$(timeout 2 jq -r '.type // empty' <<<"$payload" 2>/dev/null) || exit 0
 [[ -n $type ]] || exit 0
 
 # Stable per-conversation id when Codex provides one; else the notify
 # process's parent (the codex process itself).
-id=$(jq -r '."thread-id" // ."turn-id" // empty' <<<"$payload")
+id=$(timeout 2 jq -r '."thread-id" // ."turn-id" // empty' <<<"$payload" 2>/dev/null) || exit 0
 [[ -n $id ]] || id="codex-$PPID"
 id="${id//[^A-Za-z0-9._-]/-}"
 
-cwd=$(jq -r '.cwd // empty' <<<"$payload")
+cwd=$(timeout 2 jq -r '.cwd // empty' <<<"$payload" 2>/dev/null) || exit 0
 [[ -n $cwd ]] || cwd="$PWD"
 
 case "$type" in
@@ -34,8 +36,7 @@ case "$type" in
   *) exit 0 ;;
 esac
 
-file="$SPOOL/$id.json"
-tmp="$file.tmp.$$"
+# secure-state publishes through a private, exclusive, no-follow descriptor.
 jq -cn \
   --arg id "$id" \
   --arg state "$state" \
@@ -43,5 +44,5 @@ jq -cn \
   --arg agent "codex" \
   --arg message "" \
   --argjson ts "$(date +%s%3N)" \
-  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' > "$tmp"
-mv -f "$tmp" "$file"
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' \
+  | "$SPOOL_HELPER" write "$SPOOL" "$id"

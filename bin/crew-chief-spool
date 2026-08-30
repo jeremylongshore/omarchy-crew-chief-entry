@@ -1,0 +1,364 @@
+#!/usr/bin/perl
+# Descriptor-bound Crew Chief spool lifecycle. Every adapter delegates mutable
+# local state to this one primitive so final, temporary, parent, FIFO, and
+# oversized-file races fail closed instead of being followed by pathname.
+use strict;
+use warnings;
+
+use Fcntl qw(:DEFAULT :flock :mode);
+use File::Spec;
+use IO::Handle;
+use JSON::PP qw(decode_json encode_json);
+use Time::HiRes qw(time);
+
+umask 0077;
+my $MAX_INPUT       = 8192;
+my $MAX_FILE_BYTES  = 4096;
+my $MAX_FILES       = 64;
+my $MAX_RETAINED    = 256;
+my $MAX_CENSUS      = 1024;
+my $MAX_PRUNE_INPUT = 65536;
+my $MAX_HERDR_INPUT = 262144;
+my $LOCK            = '.spool.lock';
+
+sub pause_ms {
+    my ($name) = @_;
+    my $ms = $ENV{$name} // 0;
+    return unless $ms =~ /\A\d{1,5}\z/ && $ms > 0;
+    select undef, undef, undef, $ms / 1000;
+}
+
+sub valid_id {
+    my ($id) = @_;
+    return defined($id) && $id =~ /\A[A-Za-z0-9._-]{1,128}\z/;
+}
+
+sub state_path {
+    my ($requested) = @_;
+    return $requested if defined($requested) && length($requested);
+    my $home = $ENV{HOME} // '';
+    my $base = length($ENV{XDG_STATE_HOME} // '')
+        ? $ENV{XDG_STATE_HOME}
+        : File::Spec->catdir($home, '.local', 'state');
+    return File::Spec->catdir($base, 'omarchy', 'crew-chief');
+}
+
+sub open_spool_chain {
+    my ($requested) = @_;
+    my $full = state_path($requested);
+    die "spool path must be absolute\n"
+        unless File::Spec->file_name_is_absolute($full);
+    my @parts = grep { length($_) } File::Spec->splitdir($full);
+    die "unsafe spool path\n" if grep { $_ eq '.' || $_ eq '..' } @parts;
+
+    my $current;
+    sysopen($current, '/', O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        or die "cannot pin filesystem root\n";
+    my @chain = ($current);
+    for my $part (@parts) {
+        chdir($current) or die "cannot traverse spool path\n";
+        my $next;
+        unless (sysopen($next, $part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)) {
+            mkdir($part, 0700);
+            sysopen($next, $part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+                or die "unsafe spool path component\n";
+        }
+        my @st = stat($next);
+        die "unsafe spool path component\n"
+            unless @st && S_ISDIR($st[2]);
+        push @chain, $next;
+        $current = $next;
+    }
+    my @final = stat($current);
+    die "unsafe spool directory owner\n"
+        unless @final && S_ISDIR($final[2]) && $final[4] == $<;
+    chmod(0700, $current) or die "cannot privatize spool directory\n";
+    chdir($current) or die "cannot retain spool directory\n";
+    pause_ms('CREW_CHIEF_TEST_PARENT_DELAY_MS');
+    return (\@chain, $current);
+}
+
+sub same_object {
+    my ($left, $right) = @_;
+    return @$left && @$right
+        && $left->[0] == $right->[0]
+        && $left->[1] == $right->[1]
+        && S_ISREG($left->[2]) && S_ISREG($right->[2]);
+}
+
+sub lock_spool {
+    my $fh;
+    sysopen($fh, $LOCK, O_RDWR | O_CREAT | O_NONBLOCK | O_NOFOLLOW, 0600)
+        or die "cannot open private spool lock\n";
+    my @opened = stat($fh);
+    my @named = lstat($LOCK);
+    die "unsafe spool lock\n"
+        unless same_object(\@opened, \@named) && $opened[4] == $<;
+    chmod(0600, $fh) or die "cannot privatize spool lock\n";
+    flock($fh, LOCK_EX) or die "cannot lock spool\n";
+    return $fh;
+}
+
+sub bounded_stdin {
+    my ($cap) = @_;
+    my $raw = '';
+    while (length($raw) <= $cap) {
+        my $n = sysread(STDIN, my $chunk, 4096);
+        last unless defined($n) && $n > 0;
+        $raw .= $chunk;
+    }
+    die "spool input exceeded bound\n" if length($raw) > $cap;
+    return $raw;
+}
+
+sub payload_from_row {
+    my ($row, $expected_id) = @_;
+    die "invalid spool record\n" unless ref($row) eq 'HASH';
+    die "spool id mismatch\n"
+        unless valid_id($row->{id}) && $row->{id} eq $expected_id;
+    die "invalid spool state\n"
+        unless ($row->{state} // '') =~ /\A(?:working|needs_you|done)\z/;
+    for my $key (qw(cwd agent message)) {
+        die "invalid spool field\n" if ref($row->{$key});
+    }
+    die "invalid spool timestamp\n"
+        unless ($row->{ts} // '') =~ /\A[1-9][0-9]{0,15}\z/;
+    my $clean = {
+        id      => $expected_id,
+        state   => $row->{state},
+        cwd     => substr($row->{cwd} // '', 0, 512),
+        agent   => substr($row->{agent} // '', 0, 64),
+        message => substr($row->{message} // '', 0, 512),
+        ts      => 0 + $row->{ts},
+    };
+    my $payload = encode_json($clean) . "\n";
+    die "spool record exceeded file bound\n"
+        if length($payload) > $MAX_FILE_BYTES;
+    return $payload;
+}
+
+sub validated_payload {
+    my ($expected_id) = @_;
+    my $raw = bounded_stdin($MAX_INPUT);
+    my $row = eval { decode_json($raw) };
+    return payload_from_row($row, $expected_id);
+}
+
+sub open_temp {
+    for (1 .. 64) {
+        my $forced = $ENV{CREW_CHIEF_TEST_TEMP_NAME} // '';
+        my $name = valid_id($forced)
+            ? ".$forced.tmp"
+            : sprintf('.session.%d.%08x%08x.tmp', $$,
+                int(rand(0xffffffff)), int(rand(0xffffffff)));
+        my $fh;
+        if (sysopen($fh, $name,
+                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600)) {
+            chmod(0600, $fh) or die "cannot privatize spool temp\n";
+            return ($name, $fh);
+        }
+        last if length($forced);
+    }
+    die "cannot create private spool temp\n";
+}
+
+sub safe_remove_name {
+    my ($name) = @_;
+    my $fh;
+    return unless sysopen($fh, $name, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+    my @opened = stat($fh);
+    my @named = lstat($name);
+    unlink($name) if same_object(\@opened, \@named) && $opened[4] == $<;
+    close($fh);
+}
+
+sub candidates {
+    my ($cap) = @_;
+    opendir(my $dh, '.') or die "cannot enumerate spool\n";
+    my @rows;
+    my $overflow = 0;
+    while (defined(my $name = readdir($dh))) {
+        next unless $name =~ /\A[A-Za-z0-9._-]{1,128}\.json\z/;
+        if (@rows >= $cap) { $overflow = 1; last }
+        my @st = lstat($name);
+        next unless @st && S_ISREG($st[2]) && $st[4] == $<;
+        push @rows, [$st[9], $name, $st[0], $st[1]];
+    }
+    closedir($dh);
+    return (\@rows, $overflow);
+}
+
+sub enforce_retention {
+    my ($dir_fh) = @_;
+    my ($rows) = candidates($MAX_CENSUS);
+    return unless @$rows > $MAX_RETAINED;
+    my @oldest = sort { $a->[0] <=> $b->[0] || $a->[1] cmp $b->[1] } @$rows;
+    while (@oldest > $MAX_RETAINED) {
+        my $row = shift @oldest;
+        safe_remove_name($row->[1]);
+    }
+    $dir_fh->sync or die "spool directory fsync failed\n";
+}
+
+sub publish_record {
+    my ($id, $payload, $dir_fh) = @_;
+    die "invalid spool id\n" unless valid_id($id);
+    my ($temp, $fh) = open_temp();
+    my @opened = stat($fh);
+    my $published = 0;
+    my $ok = eval {
+        my $offset = 0;
+        while ($offset < length($payload)) {
+            my $n = syswrite($fh, substr($payload, $offset));
+            die "spool write failed\n" unless defined($n) && $n > 0;
+            $offset += $n;
+        }
+        $fh->sync or die "spool fsync failed\n";
+        pause_ms('CREW_CHIEF_TEST_TEMP_DELAY_MS');
+        my @named = lstat($temp);
+        die "spool temp identity changed\n"
+            unless same_object(\@opened, \@named);
+        my $final = "$id.json";
+        rename($temp, $final) or die "spool replace failed\n";
+        $published = 1;
+        my @final = lstat($final);
+        die "spool publication identity changed\n"
+            unless same_object(\@opened, \@final);
+        $dir_fh->sync or die "spool directory fsync failed\n";
+        close($fh) or die "spool close failed\n";
+        1;
+    };
+    unless ($ok) {
+        my $error = $@ || "spool publication failed\n";
+        close($fh);
+        safe_remove_name($temp) unless $published;
+        die $error;
+    }
+}
+
+sub write_record {
+    my ($id, $dir_fh) = @_;
+    publish_record($id, validated_payload($id), $dir_fh);
+    enforce_retention($dir_fh);
+}
+
+sub remove_record {
+    my ($id, $dir_fh) = @_;
+    die "invalid spool id\n" unless valid_id($id);
+    safe_remove_name("$id.json");
+    $dir_fh->sync or die "spool directory fsync failed\n";
+}
+
+sub list_records {
+    my ($rows, $overflow) = candidates($MAX_CENSUS);
+    my $total = scalar(@$rows) + ($overflow ? 1 : 0);
+    print encode_json({ __spoolTotal => $total }) . "\n";
+    my @newest = sort { $b->[0] <=> $a->[0] || $a->[1] cmp $b->[1] } @$rows;
+    splice(@newest, $MAX_FILES) if @newest > $MAX_FILES;
+    for my $row (@newest) {
+        my ($name, $dev, $ino) = ($row->[1], $row->[2], $row->[3]);
+        my $fh;
+        next unless sysopen($fh, $name, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+        my @opened = stat($fh);
+        next unless @opened && S_ISREG($opened[2]) && $opened[4] == $<
+            && $opened[0] == $dev && $opened[1] == $ino
+            && $opened[7] > 0 && $opened[7] <= $MAX_FILE_BYTES;
+        my $raw = '';
+        while (length($raw) <= $MAX_FILE_BYTES) {
+            my $n = sysread($fh, my $chunk, 1024);
+            last unless defined($n) && $n > 0;
+            $raw .= $chunk;
+        }
+        close($fh);
+        next if length($raw) > $MAX_FILE_BYTES;
+        my $decoded = eval { decode_json($raw) };
+        next unless ref($decoded) eq 'HASH';
+        print encode_json($decoded) . "\n";
+    }
+}
+
+sub prune_herdr {
+    my ($dir_fh, $raw) = @_;
+    $raw = bounded_stdin($MAX_PRUNE_INPUT) unless defined($raw);
+    my %keep;
+    for my $id (split /\n/, $raw) {
+        next unless length($id);
+        die "invalid herdr spool id\n"
+            unless valid_id($id) && $id =~ /\Aherdr-/;
+        $keep{$id} = 1;
+        die "too many herdr ids\n" if keys(%keep) > 256;
+    }
+    opendir(my $dh, '.') or die "cannot enumerate spool\n";
+    my @remove;
+    while (defined(my $name = readdir($dh))) {
+        next unless $name =~ /\A(herdr-[A-Za-z0-9._-]{1,122})\.json\z/;
+        push @remove, $name unless $keep{$1};
+        last if @remove > $MAX_RETAINED;
+    }
+    closedir($dh);
+    safe_remove_name($_) for @remove;
+    $dir_fh->sync or die "spool directory fsync failed\n";
+}
+
+sub sync_herdr {
+    my ($dir_fh) = @_;
+    my $raw = bounded_stdin($MAX_HERDR_INPUT);
+    my $data = eval { decode_json($raw) };
+    my $agents = ref($data) eq 'HASH'
+        && ref($data->{result}) eq 'HASH'
+        && ref($data->{result}->{agents}) eq 'ARRAY'
+        ? $data->{result}->{agents}
+        : [];
+    my @ids;
+    my $now = int(time() * 1000);
+    my $limit = @$agents < 64 ? scalar(@$agents) : 64;
+    for my $index (0 .. $limit - 1) {
+        my $agent = $agents->[$index];
+        next unless ref($agent) eq 'HASH';
+        my $terminal = $agent->{terminal_id} // '';
+        next if ref($terminal) || !length($terminal);
+        $terminal =~ s/[^A-Za-z0-9._-]/-/g;
+        my $id = "herdr-$terminal";
+        next unless valid_id($id);
+        my $status = ref($agent->{agent_status}) ? '' : ($agent->{agent_status} // '');
+        my $state = $status eq 'blocked' ? 'needs_you'
+            : ($status eq 'done' || $status eq 'idle') ? 'done' : 'working';
+        my $message = $status eq 'blocked' && !ref($agent->{terminal_title_stripped})
+            ? ($agent->{terminal_title_stripped} // '') : '';
+        my $row = {
+            id      => $id,
+            state   => $state,
+            cwd     => ref($agent->{cwd}) ? '' : ($agent->{cwd} // ''),
+            agent   => ref($agent->{agent}) ? '' : ($agent->{agent} // ''),
+            message => $message,
+            ts      => $now,
+        };
+        publish_record($id, payload_from_row($row, $id), $dir_fh);
+        push @ids, $id;
+    }
+    prune_herdr($dir_fh, join("\n", @ids) . (@ids ? "\n" : ''));
+    enforce_retention($dir_fh);
+}
+
+my $op = shift(@ARGV) // '';
+my $requested = shift(@ARGV) // '';
+die "usage: crew-chief-spool write|remove|list|prune-herdr|sync-herdr [spool] [id]\n"
+    unless $op =~ /\A(?:write|remove|list|prune-herdr|sync-herdr)\z/;
+my ($chain, $dir_fh) = open_spool_chain($requested);
+my $lock_fh = lock_spool();
+if ($op eq 'write') {
+    die "write requires one id\n" unless @ARGV == 1;
+    write_record($ARGV[0], $dir_fh);
+} elsif ($op eq 'remove') {
+    die "remove requires one id\n" unless @ARGV == 1;
+    remove_record($ARGV[0], $dir_fh);
+} elsif ($op eq 'list') {
+    die "list takes no id\n" if @ARGV;
+    list_records();
+} elsif ($op eq 'prune-herdr') {
+    die "prune-herdr takes no id\n" if @ARGV;
+    prune_herdr($dir_fh);
+} else {
+    die "sync-herdr takes no id\n" if @ARGV;
+    sync_herdr($dir_fh);
+}

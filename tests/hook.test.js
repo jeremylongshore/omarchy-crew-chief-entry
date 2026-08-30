@@ -6,6 +6,7 @@ const os = require("node:os")
 const path = require("node:path")
 
 const HOOK = path.join(__dirname, "..", "hooks", "crew-chief-event")
+const jsonFiles = spool => fs.readdirSync(spool).filter(f => f.endsWith(".json"))
 
 function runHook(spool, payload) {
   execFileSync("bash", [HOOK], {
@@ -54,7 +55,7 @@ test("hook output is single-line JSON the widget can cat together", (t) => {
   t.after(() => fs.rmSync(spool, { recursive: true, force: true }))
   runHook(spool, { session_id: "a", hook_event_name: "SessionStart", cwd: "/x/one" })
   runHook(spool, { session_id: "b", hook_event_name: "Notification", cwd: "/x/two", message: "hi" })
-  const cat = fs.readdirSync(spool).sort()
+  const cat = jsonFiles(spool).sort()
     .map((f) => fs.readFileSync(path.join(spool, f), "utf8").trim())
     .join("\n")
   const Model = require("../Model.js")
@@ -104,7 +105,7 @@ test("generic reporter covers any harness: states, defaults, end", (t) => {
   // Hostile id characters are flattened, never a path escape.
   execFileSync("bash", [reporter, "done", "--id", "../../evil"], { env })
   assert.ok(fs.existsSync(path.join(spool, "-..-..-evil".replace(/^/, "") + ".json")) ||
-    fs.readdirSync(spool).every((f) => !f.includes("/")))
+    jsonFiles(spool).every((f) => !f.includes("/")))
 
   execFileSync("bash", [reporter, "end", "--id", "g1"], { env })
   assert.equal(fs.existsSync(path.join(spool, "g1.json")), false)
@@ -127,10 +128,10 @@ test("codex notify adapter maps turn completion to done", (t) => {
 
   // Unknown event types are ignored, not errors.
   execFileSync("bash", [adapter, JSON.stringify({ type: "something-else" })], { env })
-  assert.equal(fs.readdirSync(spool).length, 1)
+  assert.equal(jsonFiles(spool).length, 1)
   // Garbage payload exits quietly too.
   execFileSync("bash", [adapter, "not json"], { env })
-  assert.equal(fs.readdirSync(spool).length, 1)
+  assert.equal(jsonFiles(spool).length, 1)
 })
 
 test("spool rows carry the agent through parseSpool", () => {
@@ -167,7 +168,7 @@ test("herdr adapter snapshots agents, maps states, prunes vanished rows", (t) =>
   fs.writeFileSync(path.join(spool, "manual.json"), JSON.stringify({ id: "manual", state: "working", cwd: "/p/x", agent: "goose", message: "", ts: 5 }))
 
   execFileSync("bash", [adapter], { env })
-  const rows = Object.fromEntries(fs.readdirSync(spool).map((f) => [f, JSON.parse(fs.readFileSync(path.join(spool, f), "utf8"))]))
+  const rows = Object.fromEntries(jsonFiles(spool).map((f) => [f, JSON.parse(fs.readFileSync(path.join(spool, f), "utf8"))]))
   assert.equal(rows["herdr-t1.json"].state, "needs_you")
   assert.equal(rows["herdr-t1.json"].agent, "codex")
   assert.equal(rows["herdr-t1.json"].message, "fix webhook retries")
@@ -178,10 +179,10 @@ test("herdr adapter snapshots agents, maps states, prunes vanished rows", (t) =>
   // Pane t2 vanishes -> its row is pruned; manual row still untouched.
   writeFake([{ agent: "codex", agent_status: "working", cwd: "/p/payments-api", terminal_id: "t1", terminal_title_stripped: "" }])
   execFileSync("bash", [adapter], { env })
-  const after = fs.readdirSync(spool).sort()
+  const after = jsonFiles(spool).sort()
   assert.deepEqual(after, ["herdr-t1.json", "manual.json"])
 
   // No herdr on PATH -> silent no-op.
   execFileSync("bash", [adapter], { env: { ...process.env, CREW_CHIEF_SPOOL: spool, PATH: "/usr/bin:/bin" } })
-  assert.deepEqual(fs.readdirSync(spool).sort(), ["herdr-t1.json", "manual.json"])
+  assert.deepEqual(jsonFiles(spool).sort(), ["herdr-t1.json", "manual.json"])
 })

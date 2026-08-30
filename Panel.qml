@@ -45,7 +45,10 @@ Panel {
     return false
   }
 
-  readonly property string spoolDir: Quickshell.env("HOME") + "/.local/state/omarchy/crew-chief"
+  readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") !== ""
+    ? Quickshell.env("XDG_STATE_HOME")
+    : Quickshell.env("HOME") + "/.local/state"
+  readonly property string spoolDir: stateHome + "/omarchy/crew-chief"
 
   // Set when the last read hit a bound, so the hero can say the fleet shown is
   // partial instead of pretending it is complete.
@@ -57,6 +60,7 @@ Panel {
 
   property var sessions: []
   property double nowMs: Date.now()
+  property int selIdx: 0
 
   readonly property int pollSec: Math.max(1, parseInt(setting("pollSec", 3), 10) || 3)
   readonly property int staleMinutes: Math.max(30, parseInt(setting("staleMinutes", 240), 10) || 240)
@@ -69,6 +73,8 @@ Panel {
   // Process argv entries—not through `bash -c`—means an apostrophe in HOME or
   // a path can never alter the command that reads the session spool.
   readonly property string spoolReaderPath: Qt.resolvedUrl("bin/read-spool").toString().replace(/^file:\/\//, "")
+  readonly property string spoolHelperPath: Qt.resolvedUrl("bin/crew-chief-spool").toString().replace(/^file:\/\//, "")
+  property var dismissQueue: []
 
   readonly property var liveList: Model.liveSessions(sessions, nowMs, staleMinutes * 60000)
   readonly property var visibleList: {
@@ -80,6 +86,25 @@ Panel {
   }
   readonly property var summary: Model.summarize(liveList)
   readonly property bool needsAttention: summary.needs > 0
+
+  onVisibleListChanged: {
+    if (selIdx >= visibleList.length) selIdx = visibleList.length > 0 ? visibleList.length - 1 : 0
+  }
+
+  function moveCursor(dy) {
+    if (visibleList.length === 0) return
+    selIdx = Math.max(0, Math.min(visibleList.length - 1, selIdx + dy))
+  }
+
+  function activateSelected() {
+    if (visibleList.length === 0) return
+    focusProject(visibleList[selIdx].project)
+  }
+
+  function dismissSelected() {
+    if (visibleList.length === 0) return
+    dismiss(visibleList[selIdx].id)
+  }
 
   // Bar pill: headset glyph + fleet status. Empty (slot collapses) with no
   // live sessions.
@@ -97,12 +122,17 @@ Panel {
     if (!spoolProc.running) spoolProc.running = true
   }
 
-  // Dismiss one session row (rm its spool file). Ids come from hook-written
-  // file content; only act on shapes that cannot escape the spool dir.
+  function runNextDismiss() {
+    if (dismissProc.running || dismissQueue.length === 0) return
+    dismissProc.command = [spoolHelperPath, "remove", spoolDir, dismissQueue[0]]
+    dismissProc.running = true
+  }
+
+  // Dismiss through the same descriptor-bound lifecycle as every writer.
   function dismiss(id) {
     if (!/^[A-Za-z0-9._-]+$/.test(id)) return
-    dismissProc.command = ["rm", "-f", spoolDir + "/" + id + ".json"]
-    dismissProc.running = true
+    if (dismissQueue.indexOf(id) < 0) dismissQueue = dismissQueue.concat([id])
+    runNextDismiss()
   }
 
   function clearFinished() {
@@ -150,7 +180,11 @@ Panel {
 
   Process {
     id: dismissProc
-    onExited: root.refresh()
+    onExited: {
+      root.dismissQueue = root.dismissQueue.slice(1)
+      root.runNextDismiss()
+      root.refresh()
+    }
   }
 
   Process { id: focusProc }
@@ -182,7 +216,9 @@ Panel {
     open: root.opened
     centerOnBar: true
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(400))
+    // The marketplace preview and a real multi-agent fleet need enough width
+    // to show project, harness, state, age, and the blocked headline together.
+    contentWidth: panel.fittedContentWidth(Style.space(560))
     contentHeight: panel.fittedContentHeight(contentColumn.implicitHeight)
 
     PanelKeyCatcher {
@@ -190,6 +226,15 @@ Panel {
       anchors.fill: parent
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
+      onMoveRequested: function(dx, dy) { root.moveCursor(dy) }
+      onActivateRequested: root.activateSelected()
+      onDeleteRequested: root.dismissSelected()
+      onTextKey: function(t) {
+        if (t === "r") root.refresh()
+        else if (t === "o") root.activateSelected()
+        else if (t === "x") root.dismissSelected()
+        else if (t === "c") root.clearFinished()
+      }
 
       Flickable {
         anchors.fill: parent
@@ -247,8 +292,10 @@ Panel {
 
             Item {
               id: row
+              required property int index
               required property var modelData
               readonly property bool blocked: modelData.state === "needs_you"
+              readonly property bool selected: index === root.selIdx
               readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
               width: contentColumn.width
               height: rowCol.implicitHeight + Style.space(10)
@@ -258,7 +305,8 @@ Panel {
                 anchors.leftMargin: Style.space(8)
                 anchors.rightMargin: Style.space(8)
                 radius: Style.cornerRadius
-                color: rowArea.containsMouse ? Style.hoverFillFor(row.fg, Color.accent) : "transparent"
+                color: row.selected || rowArea.containsMouse
+                  ? Style.hoverFillFor(row.fg, Color.accent) : "transparent"
               }
 
               Column {
@@ -371,7 +419,11 @@ Panel {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                Accessible.role: Accessible.Button
+                Accessible.name: (row.modelData.project || row.modelData.id)
+                  + ", " + Model.stateLabel(row.modelData.state)
                 onClicked: function(mouse) {
+                  root.selIdx = row.index
                   if (mouse.button === Qt.RightButton) {
                     root.dismiss(row.modelData.id)
                     return
@@ -408,6 +460,8 @@ Panel {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                Accessible.role: Accessible.Button
+                Accessible.name: "Clear finished Crew Chief sessions"
                 onClicked: root.clearFinished()
               }
             }

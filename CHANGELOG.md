@@ -10,7 +10,24 @@ Regenerate with `scripts/gen-changelog.sh`.
 
 ## [Unreleased]
 
-Nothing yet.
+## [1.1.0] - 2026-08-29
+
+### Security
+
+- Bind every spool operation to same-owner, no-follow directory and file descriptors.
+- Bound reporter input, record size, directory census, visible fleet, and retention.
+- Serialize writes, reads, pruning, Herdr sync, and dismissals behind one private lock.
+
+### Added
+
+- Add keyboard row navigation, activation, dismissal, refresh, and clear-finished controls.
+- Add accessible dynamic bar, row, and clear-control names.
+- Add hostile-path, concurrent-writer, mutation, race, Buzz system, and presentation gates.
+
+### Changed
+
+- Give Crew Chief exact marketplace copy that explains the attention-first workflow and local trust boundary.
+- Replace the legacy wide crop with a full-frame 1280x720 production-shell story capture.
 
 ## [1.0.0] - 2026-08-22
 
@@ -39,4 +56,3 @@ Tooling and repository changes with no effect on the shipped plugin.
 - Vendor c40, the panel design gate, and repair the sync that dropped it
 - Vendor rig-render, which loads the plugin into a real shell
 - Add four-lane MiniMax review and backfill the changelog
-

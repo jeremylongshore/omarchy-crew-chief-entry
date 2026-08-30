@@ -49,13 +49,19 @@ test("parseSpool survives glued objects with no newline between them", () => {
 test("splitJsonObjects handles noise around and between objects", () => {
   assert.deepEqual(Model.splitJsonObjects('junk {"a":1} mid {"b":"}{"} end'), ['{"a":1}', '{"b":"}{"}'])
   assert.deepEqual(Model.splitJsonObjects(""), [])
+  assert.deepEqual(Model.splitJsonObjects(null), [])
   assert.deepEqual(Model.splitJsonObjects("}}}"), [])
+  assert.deepEqual(Model.splitJsonObjects('}{"a":{"b":2}}{'), ['{"a":{"b":2}}'])
+  assert.deepEqual(Model.splitJsonObjects('{"a":"escaped \\\" quote and \\\\ slash"}'), ['{"a":"escaped \\\" quote and \\\\ slash"}'])
+  assert.deepEqual(Model.splitJsonObjects('{"unfinished":true'), [])
 })
 
 test("projectName takes the last path segment", () => {
   assert.equal(Model.projectName("/a/b/c"), "c")
   assert.equal(Model.projectName("/a/b/c///"), "c")
   assert.equal(Model.projectName(""), "")
+  assert.equal(Model.projectName(null), "")
+  assert.equal(Model.projectName("/"), "")
 })
 
 test("focusTarget retains literal punctuation but rejects control characters", () => {
@@ -63,6 +69,8 @@ test("focusTarget retains literal punctuation but rejects control characters", (
   assert.equal(Model.focusTarget("  spaced repo  "), "spaced repo")
   assert.equal(Model.focusTarget("bad\nselector"), "")
   assert.equal(Model.focusTarget(""), "")
+  assert.equal(Model.focusTarget(null), "")
+  assert.equal(Model.focusTarget("x".repeat(121)), "x".repeat(120))
 })
 
 test("bounded spool reader accepts an apostrophe in its directory as argv", () => {
@@ -85,16 +93,31 @@ test("liveSessions drops stale entries", () => {
   const live = Model.liveSessions(sessions, NOW, 240_000)
   assert.deepEqual(live.map((s) => s.id), ["aaa", "ccc", "ddd"])
   assert.equal(Model.liveSessions(sessions, NOW, 3_600_000).length, 4)
+  assert.deepEqual(Model.liveSessions([{ id: "edge", ts: NOW - 10 }], NOW, 10).map((s) => s.id), ["edge"])
 })
 
 test("sortSessions puts oldest attention first, then working, then done", () => {
   const sorted = Model.sortSessions(Model.parseSpool(spool))
   assert.deepEqual(sorted.map((s) => s.id), ["bbb", "ddd", "aaa", "ccc"])
+  const working = Model.sortSessions([
+    { id: "older", state: "working", ts: 1 },
+    { id: "newer", state: "working", ts: 2 }
+  ])
+  assert.deepEqual(working.map((s) => s.id), ["newer", "older"])
+  const waiting = Model.sortSessions([
+    { id: "new-wait", state: "needs_you", ts: 9 },
+    { id: "old-wait", state: "needs_you", ts: 1 },
+    { id: "done", state: "done", ts: 20 }
+  ])
+  assert.deepEqual(waiting.map((s) => s.id), ["old-wait", "new-wait", "done"])
 })
 
 test("summarize counts states", () => {
   const s = Model.summarize(Model.parseSpool(spool))
   assert.deepEqual(s, { total: 4, needs: 2, working: 1, done: 1 })
+  assert.deepEqual(Model.summarize([{ state: "unknown" }, { state: "done" }]), {
+    total: 2, needs: 0, working: 1, done: 1
+  })
 })
 
 test("pillText escalates: silent, count, done, needs-you", () => {
@@ -104,6 +127,7 @@ test("pillText escalates: silent, count, done, needs-you", () => {
   assert.equal(Model.pillText({ total: 2, needs: 0, working: 0, done: 2 }), "2 done")
   assert.equal(Model.pillText({ total: 4, needs: 1, working: 3, done: 0 }), "1 needs you")
   assert.equal(Model.pillText({ total: 4, needs: 2, working: 2, done: 0 }), "2 need you")
+  assert.equal(Model.pillText({ total: 3, needs: 0, working: 1, done: 2 }), "3")
 })
 
 test("stateLabel and ageText render row chrome", () => {
@@ -130,6 +154,36 @@ test("parseSpool caps the number of sessions it will build", () => {
   assert.equal(Model.spoolTruncated(), true)
 })
 
+test("parseSpool preserves exact limits and normalizes every public field", () => {
+  const exact = Array.from({ length: Model.MAX_SESSIONS }, (_, i) =>
+    JSON.stringify({ id: i + 1, state: "working", cwd: null, agent: null, message: null, ts: "bad" })).join("\n")
+  const rows = Model.parseSpool(exact)
+  assert.equal(rows.length, Model.MAX_SESSIONS)
+  assert.equal(Model.spoolTruncated(), false)
+  assert.deepEqual(rows[0], {
+    id: "1", state: "working", cwd: "", project: "", agent: "", message: "", ts: 0
+  })
+})
+
+test("parseSpool rejects non-records and invalid records without poisoning later rows", () => {
+  const raw = [
+    "null", "[]", "42", '"text"', '{"id":""}', '{"id":"ok","state":"done","cwd":"/p/ok","ts":7}'
+  ].join("\n")
+  assert.deepEqual(Model.parseSpool(raw).map((r) => r.id), ["ok"])
+})
+
+test("spool census accepts whitespace and multi-digit totals, and resets between parses", () => {
+  const row = '{"id":"one","state":"working","ts":1}'
+  assert.equal(Model.spoolCensus('{"__spoolTotal":   123}'), 123)
+  assert.equal(Model.spoolCensus(null), -1)
+  Model.parseSpool('{"__spoolTotal":123}\n' + row)
+  assert.equal(Model.spoolTotal(), 123)
+  assert.equal(Model.spoolTruncated(), true)
+  Model.parseSpool(row)
+  assert.equal(Model.spoolTotal(), 0)
+  assert.equal(Model.spoolTruncated(), false)
+})
+
 test("parseSpool caps total input characters", () => {
   const one = JSON.stringify({ id: "a", state: "working", cwd: "/x", ts: 1 }) + "\n"
   const huge = one.repeat(200000)
@@ -145,6 +199,9 @@ test("a normal spool is not reported as truncated", () => {
     JSON.stringify({ id: "s" + i, state: "working", cwd: "/p", ts: 1 })).join("\n")
   assert.equal(Model.parseSpool(few).length, 3)
   assert.equal(Model.spoolTruncated(), false)
+  assert.equal(Model.spoolTotal(), 0)
+  Model.parseSpool('{"__spoolTotal":9}\n' + few)
+  assert.equal(Model.spoolTotal(), 9)
 })
 
 test("the spool bounds are consistent with each other", () => {

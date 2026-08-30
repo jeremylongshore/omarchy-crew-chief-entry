@@ -71,6 +71,8 @@ BarWidget {
     // chief is on the radio.
     active: panelLoader.item ? panelLoader.item.needsAttention === true : false
     tooltipText: panelLoader.item ? panelLoader.item.tooltip : ""
+    Accessible.role: Accessible.Button
+    Accessible.name: root.opened ? "Close Crew Chief" : "Open Crew Chief"
 
     onPressed: function(b) {
       if (b === Qt.MiddleButton) root.refresh()

@@ -2,7 +2,7 @@
 
 Crew Chief is harness-agnostic by design. The widget never talks to any agent tool.
 it watches a spool directory of tiny JSON files, one per session. **Anything that can
-run a command or write a file can appear in the fleet.**
+run the bundled reporter can appear in the fleet.**
 
 ## The contract
 
@@ -27,13 +27,17 @@ run a command or write a file can appear in the fleet.**
 | `state` | yes | `working`, `needs_you`, or `done`. Unknown values render as `working` |
 | `cwd` | no | Project directory; the last path segment becomes the row label |
 | `agent` | no | Harness name (`claude-code`, `codex`, `goose`, `kilo`, `pi`, `hermes`, ...) shown dimmed on the row |
-| `message` | no | One-line reason shown under a `needs_you` row (the blocking prompt) |
+| `message` | no | Capped one-line attention headline shown under a `needs_you` row; never include secrets or transcript text |
 | `ts` | yes | Unix epoch **milliseconds** of the last event. Rows stale for 4h (configurable) drop off |
 
-- Write atomically (temp file + `mv`) so the watcher never reads a torn write.
-- Session over → **delete the file**.
+- Write and remove only through `bin/crew-chief-spool` (normally via
+  `crew-chief-report` or an adapter). It owns locking, no-follow descriptors,
+  identity checks, atomic publication, bounds, retention, and directory fsync.
+- Session over → invoke `crew-chief-report end`.
 - The widget polls every 3s (configurable) and tolerates missing newlines,
   garbage files, and unknown fields.
+- Records are capped at 4 KiB, reads at 64 records from a 1,024-entry census,
+  and retention at 256 records.
 
 ## The easy way: `crew-chief-report`
 
