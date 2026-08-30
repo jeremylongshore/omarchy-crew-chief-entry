@@ -218,8 +218,9 @@ Panel {
     focusTarget: keyCatcher
     // The marketplace preview and a real multi-agent fleet need enough width
     // to show project, harness, state, age, and the blocked headline together.
-    contentWidth: panel.fittedContentWidth(Style.space(560))
-    contentHeight: panel.fittedContentHeight(contentColumn.implicitHeight)
+    contentWidth: panel.fittedContentWidth(Style.space(680))
+    contentHeight: panel.fittedContentHeight(
+      Math.max(contentColumn.implicitHeight, Style.space(350)))
 
     PanelKeyCatcher {
       id: keyCatcher
