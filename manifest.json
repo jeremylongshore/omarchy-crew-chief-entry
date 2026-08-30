@@ -5,7 +5,7 @@
   "version": "1.1.0",
   "author": "Jeremy Longshore",
   "license": "MIT",
-  "description": "Crew Chief turns lifecycle reports from Claude Code, Codex, Herdr, and any tool that can run a command into an attention-first Omarchy console. The bar stays quiet without a fleet, counts work and turns urgent when a session needs you. Open the panel to see project, harness, state, age, and the prompt headline, with blocked work first; jump to its terminal or dismiss it. A private bounded local spool carries lifecycle metadata only. No network, account, API key, telemetry, or transcript polling.",
+  "description": "Crew Chief turns AI coding sessions into one attention queue, so a run waiting for you cannot hide behind terminal tabs. Claude Code, Codex, Herdr, and command-capable tools report working, blocked, or done. The bar hides when idle, counts work, and flashes NEEDS YOU. The panel sorts blocked work first, shows project, harness, age, and prompt, then focuses its terminal or dismisses it. Only bounded lifecycle metadata enters a local spool. No network, account, key, telemetry, or transcript reads.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Crew Chief",
-    "description": "The pill disappears when no agent is reporting, shows the fleet count while work runs and escalates to NEEDS YOU the moment work blocks. The keyboard-ready panel sorts attention first and shows project, harness, state, age, and a capped message. Click a row to focus its terminal, right-click to dismiss it, or clear finished runs. Claude hooks, Codex notify, zero-config Herdr sync, and a generic reporter feed one private descriptor-bound spool with strict file, record, retention, and scan limits.",
+    "description": "Crew Chief turns AI coding sessions into one attention queue, so a run waiting for you cannot hide behind terminal tabs. Claude Code, Codex, Herdr, and command-capable tools report working, blocked, or done. The bar hides when idle, counts work, and flashes NEEDS YOU. The panel sorts blocked work first, shows project, harness, age, and prompt, then focuses its terminal or dismisses it. Only bounded lifecycle metadata enters a local spool. No network, account, key, telemetry, or transcript reads.",
     "category": "AI",
     "aliases": [
       "crew-chief",
