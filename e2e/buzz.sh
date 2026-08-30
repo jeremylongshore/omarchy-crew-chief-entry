@@ -19,7 +19,7 @@ jq -e '.sourceDirty == false and .sourcePackageSha256 == .remotePackageSha256
   and .storyEvidence.doneCount == 1
   and .storyEvidence.harnessCount == 4
   and .storyEvidence.blockedFirstExpected == true
-  and .outputScale == 1.25
+  and .outputScale == 1.5
   and .visualInspection.status == "pending"
   and .primaryAction == "four-session fleet published through production boundaries and IPC opened the attention-first panel"' \
   "$ROOT/.render-proof.json" >/dev/null

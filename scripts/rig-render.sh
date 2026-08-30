@@ -9,7 +9,7 @@ OUT="${2:-$TARGET/preview.png}"
 HOST="${OMARCHY_RIG_HOST:-intent-ops-buzz}"
 CONTAINER="${OMARCHY_RIG_CONTAINER:-omarchy-rig}"
 RES="${OMARCHY_RIG_RESOLUTION:-1280x720}"
-SCALE="${OMARCHY_RIG_SCALE:-1.25}"
+SCALE="${OMARCHY_RIG_SCALE:-1.5}"
 
 for tool in jq identify convert; do
   command -v "$tool" >/dev/null 2>&1 || { echo "rig-render: $tool is required" >&2; exit 2; }
