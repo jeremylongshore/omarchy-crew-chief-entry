@@ -10,8 +10,11 @@ const manifest = JSON.parse(text("manifest.json"))
 test("marketplace descriptions use the complete 500-character allowance", () => {
   assert.equal(manifest.description.length, 500)
   assert.equal(manifest.barWidget.description.length, 500)
+  assert.equal(manifest.barWidget.description, manifest.description)
   assert.match(manifest.description, /Claude Code, Codex, Herdr/)
-  assert.match(manifest.barWidget.description, /NEEDS YOU/)
+  assert.match(manifest.description, /working, blocked, or done/)
+  assert.match(manifest.description, /NEEDS YOU/)
+  assert.match(manifest.description, /No network, account, key, telemetry, or transcript reads/)
 })
 
 test("manifest identity and version are release-specific", () => {
