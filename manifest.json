@@ -5,7 +5,7 @@
   "version": "1.1.0",
   "author": "Jeremy Longshore",
   "license": "MIT",
-  "description": "Crew Chief turns AI coding sessions into one attention queue, so a run waiting for you cannot hide behind terminal tabs. Claude Code, Codex, Herdr, and command-capable tools report working, blocked, or done. The bar hides when idle, counts work, and flashes NEEDS YOU. The panel sorts blocked work first, shows project, harness, age, and prompt, then focuses its terminal or dismisses it. Only bounded lifecycle metadata enters a local spool. No network, account, key, telemetry, or transcript reads.",
+  "description": "Crew Chief keeps AI coding sessions in a local attention queue so blocked work does not hide behind tabs. Claude Code, Codex, Herdr, and command-capable tools report working, blocked, or done. The bar hides when idle, counts active work, and uses alert color for NEEDS YOU. The panel sorts blocked rows first, shows project, harness, age, and a bounded attention headline, then can dismiss a row or best-effort focus its project window. No network, account, API key, telemetry, or transcript polling.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Crew Chief",
-    "description": "Crew Chief turns AI coding sessions into one attention queue, so a run waiting for you cannot hide behind terminal tabs. Claude Code, Codex, Herdr, and command-capable tools report working, blocked, or done. The bar hides when idle, counts work, and flashes NEEDS YOU. The panel sorts blocked work first, shows project, harness, age, and prompt, then focuses its terminal or dismisses it. Only bounded lifecycle metadata enters a local spool. No network, account, key, telemetry, or transcript reads.",
+    "description": "Crew Chief keeps AI coding sessions in a local attention queue so blocked work does not hide behind tabs. Claude Code, Codex, Herdr, and command-capable tools report working, blocked, or done. The bar hides when idle, counts active work, and uses alert color for NEEDS YOU. The panel sorts blocked rows first, shows project, harness, age, and a bounded attention headline, then can dismiss a row or best-effort focus its project window. No network, account, API key, telemetry, or transcript polling.",
     "category": "AI",
     "aliases": [
       "crew-chief",

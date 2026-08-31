@@ -11,10 +11,12 @@ test("marketplace descriptions use the complete 500-character allowance", () => 
   assert.equal(manifest.description.length, 500)
   assert.equal(manifest.barWidget.description.length, 500)
   assert.equal(manifest.barWidget.description, manifest.description)
-  assert.match(manifest.description, /Claude Code, Codex, Herdr/)
-  assert.match(manifest.description, /working, blocked, or done/)
-  assert.match(manifest.description, /NEEDS YOU/)
-  assert.match(manifest.description, /No network, account, key, telemetry, or transcript reads/)
+  for (const claim of [
+    "local attention queue", "Claude Code, Codex, Herdr", "working, blocked, or done",
+    "bar hides when idle", "alert color for NEEDS YOU", "sorts blocked rows first",
+    "bounded attention headline", "best-effort focus its project window",
+    "No network, account, API key, telemetry, or transcript polling"
+  ]) assert.match(manifest.description, new RegExp(claim))
 })
 
 test("manifest identity and version are release-specific", () => {

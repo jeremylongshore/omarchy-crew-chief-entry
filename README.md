@@ -29,7 +29,7 @@ in. Three integration tiers:
 | Harness | Integration | States you get |
 | --- | --- | --- |
 | **Anything running under [Herdr](https://herdr.dev)**, whose detection roster covers Claude Code, Codex, Amp, Cline, Copilot, and more | **zero config**: when `herdr` is installed, the widget consumes one bounded `herdr status --json` snapshot per poll (`herdrSync` setting, default On, harmless no-op without it) | working / needs you (blocked) / done, with the pane title as context |
-| **Claude Code** (standalone) | first-class hook adapter, one-command install (below) | working / needs you / done, with the blocking prompt |
+| **Claude Code** (standalone) | first-class hook adapter, one-command install (below) | working / needs you / done, with a bounded attention headline |
 | **OpenAI Codex** (standalone) | `adapters/codex-notify` wired into `notify` in `~/.codex/config.toml` | done (turn complete) |
 | **Goose, Kilo, pi, Hermes, aider, opencode, anything** | call `bin/crew-chief-report` from whatever event surface your tool has: hooks, notify programs, wrappers, extensions | whatever you report |
 
@@ -104,7 +104,7 @@ candidate names, opens only regular same-owner files without following links, re
 ## Using the panel
 
 - **Rows sort attention-first**. The session that's waited longest on you is on top,
-  with its blocking prompt under the project name.
+  with its reporter-supplied attention headline under the project name.
 - **Left-click a row**: best-effort jump to that project's terminal window
   (`hyprctl dispatch focuswindow`).
 - **Right-click a row**: dismiss it from the list.
