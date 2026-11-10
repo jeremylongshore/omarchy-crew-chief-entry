@@ -86,25 +86,32 @@ test("planted temporary symlink fails closed and never touches its target", (t) 
   assert.equal(fs.existsSync(path.join(spool, "safe.json")), false)
 })
 
-test("parent-directory swap stays bound to the directory opened by the helper", async (t) => {
+test("parent-directory swap stays bound to the directory opened by the helper", { timeout: 10000 }, async (t) => {
   const base = tempRoot(t, "crew-chief-parent-")
   const spool = path.join(base, "spool")
   const pinned = path.join(base, "pinned")
   fs.mkdirSync(spool)
 
   const child = spawn(helper, ["write", spool, "safe"], {
-    stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env, CREW_CHIEF_TEST_PARENT_DELAY_MS: "500" }
+    stdio: ["pipe", "pipe", "pipe"]
   })
-  child.stdin.end(row("safe"))
-  await new Promise(resolve => setTimeout(resolve, 150))
-  fs.renameSync(spool, pinned)
-  fs.mkdirSync(spool)
-
-  const status = await new Promise((resolve, reject) => {
+  t.after(() => { if (child.exitCode === null) child.kill("SIGKILL") })
+  const exited = new Promise((resolve, reject) => {
     child.once("error", reject)
     child.once("exit", resolve)
   })
+  // The helper creates its lock only after pinning and entering the directory.
+  // Keep stdin open so it cannot publish until the hostile swap is complete.
+  const deadline = Date.now() + 5000
+  while (!fs.existsSync(path.join(spool, ".spool.lock"))) {
+    assert.equal(child.exitCode, null, "helper exited before pinning its directory")
+    assert.ok(Date.now() < deadline, "helper did not pin its directory within 5 seconds")
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  fs.renameSync(spool, pinned)
+  fs.mkdirSync(spool)
+  child.stdin.end(row("safe"))
+  const status = await exited
   assert.equal(status, 0)
   assert.equal(fs.existsSync(path.join(pinned, "safe.json")), true)
   assert.equal(fs.existsSync(path.join(spool, "safe.json")), false)
