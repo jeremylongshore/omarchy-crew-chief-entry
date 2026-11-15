@@ -98,7 +98,7 @@ Panel {
 
   function activateSelected() {
     if (visibleList.length === 0) return
-    focusProject(visibleList[selIdx].project)
+    focusSession(visibleList[selIdx])
   }
 
   function dismissSelected() {
@@ -141,13 +141,10 @@ Panel {
       if (rows[i].state === "done") dismiss(rows[i].id)
   }
 
-  // Project labels originate in hook-written records. Give hyprctl one argv
-  // item so quotes and shell metacharacters remain literal title text.
-  function focusProject(project) {
-    var target = Model.focusTarget(project)
-    if (target === "" || focusProc.running) return
-    focusProc.command = ["hyprctl", "dispatch", "focuswindow", "title:" + target]
-    focusProc.running = true
+  // A row click: FocusChain tries the recorded window, then the title match,
+  // and reports in the header when nothing could be focused (issue #7).
+  function focusSession(session) {
+    focusChain.run(session)
   }
 
   Process {
@@ -187,7 +184,7 @@ Panel {
     }
   }
 
-  Process { id: focusProc }
+  FocusChain { id: focusChain }
 
   Timer {
     interval: root.pollSec * 1000
@@ -266,7 +263,8 @@ Panel {
                  + root.summary.done + " done"
                  + (root.spoolTruncated && root.spoolHidden > 0
                     ? "  ·  +" + root.spoolHidden + " not shown"
-                    : ""))
+                    : "")
+                 + (focusChain.notice !== "" ? "  ·  " + focusChain.notice : ""))
             foreground: root.bar ? root.bar.foreground : Color.foreground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
 
@@ -428,9 +426,9 @@ Panel {
                     root.dismiss(row.modelData.id)
                     return
                   }
-                  // Best-effort jump to the terminal running this project.
-                  if (root.bar && row.modelData.project !== "")
-                    root.focusProject(row.modelData.project)
+                  // Jump to the terminal window running this session.
+                  if (root.bar)
+                    root.focusSession(row.modelData)
                 }
               }
             }

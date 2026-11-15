@@ -7,7 +7,7 @@ test("the public Crew Chief model has a deterministic behavioral signature", () 
   const now = 1_800_000_000_000
   const raw = [
     '{"__spoolTotal":4}',
-    JSON.stringify({ id: "a", state: "working", cwd: "/p/api", agent: "codex", message: "", ts: now - 1000 }),
+    JSON.stringify({ id: "a", state: "working", cwd: "/p/api", agent: "codex", message: "", window: "0xabc123", ts: now - 1000 }),
     JSON.stringify({ id: "b", state: "needs_you", cwd: "/p/web", agent: "claude", message: "approve", ts: now - 5000 }),
     JSON.stringify({ id: "c", state: "done", cwd: "/p/docs", agent: "goose", message: "", ts: now - 2000 })
   ].join("\n")
@@ -28,8 +28,11 @@ test("the public Crew Chief model has a deterministic behavioral signature", () 
     labels: ["needs_you", "working", "done", "unknown"].map(Model.stateLabel),
     ages: [0, 60000, 3600000, 86400000].map(delta => Model.ageText(now - delta, now)),
     project: Model.projectName("/p/demo///"),
-    focus: Model.focusTarget(" demo repo ")
+    focus: Model.focusTarget(" demo repo "),
+    focusAttempts: [rows[0], rows[1], null].map(Model.focusAttempts),
+    luaEscape: Model.luaString('a"b]]\\ é'),
+    focusResults: ["ok\n", "No such window found", ""].map(Model.focusSucceeded)
   }
   const digest = crypto.createHash("sha256").update(JSON.stringify(signature)).digest("hex")
-  assert.equal(digest, "0eafaad062c7cf4f39d04b48d9a19cefda9d0fe822de11140ace20123cf7d61e")
+  assert.equal(digest, "9cfa34c370fb29f9840cccc3bb859e80a5ae9f9bd73713609625ef76f3edc8b9")
 })

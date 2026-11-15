@@ -161,7 +161,7 @@ test("parseSpool preserves exact limits and normalizes every public field", () =
   assert.equal(rows.length, Model.MAX_SESSIONS)
   assert.equal(Model.spoolTruncated(), false)
   assert.deepEqual(rows[0], {
-    id: "1", state: "working", cwd: "", project: "", agent: "", message: "", ts: 0
+    id: "1", state: "working", cwd: "", project: "", agent: "", message: "", window: "", ts: 0
   })
 })
 
@@ -221,4 +221,123 @@ test("parseSpool survives a mid-file truncation without leaking garbage", () => 
   for (const bad of ["", null, undefined, "not json", "  "]) {
     assert.ok(Array.isArray(Model.parseSpool(bad)))
   }
+})
+
+test("windowAddress keeps only hyprctl-style window addresses", () => {
+  assert.equal(Model.windowAddress("0x55d3c2a1b2c0"), "0x55d3c2a1b2c0")
+  assert.equal(Model.windowAddress("0xABCDEF"), "0xABCDEF")
+  assert.equal(Model.windowAddress("0x"), "")
+  assert.equal(Model.windowAddress("0x" + "f".repeat(17)), "")
+  assert.equal(Model.windowAddress("55d3c2a1b2c0"), "")
+  assert.equal(Model.windowAddress("0x12; rm -rf ~"), "")
+  assert.equal(Model.windowAddress(" 0x12"), "")
+  assert.equal(Model.windowAddress(null), "")
+  assert.equal(Model.windowAddress(["0xabc"]), "")
+  assert.equal(Model.windowAddress({ toString: () => "0xabc" }), "")
+  assert.equal(Model.windowAddress(0xabc), "")
+})
+
+test("parseSpool carries a recorded window and drops a forged one", () => {
+  const rows = Model.parseSpool([
+    JSON.stringify({ id: "a", state: "working", cwd: "/p/one", ts: NOW, window: "0xabc123" }),
+    JSON.stringify({ id: "b", state: "working", cwd: "/p/two", ts: NOW, window: "title:evil" }),
+    JSON.stringify({ id: "c", state: "working", cwd: "/p/three", ts: NOW })
+  ].join("\n"))
+  assert.deepEqual(rows.map((r) => r.window), ["0xabc123", "", ""])
+})
+
+// Decode a Lua string literal the way Lua does for the escapes luaString emits.
+function luaDecode(literal) {
+  assert.ok(literal.startsWith('"') && literal.endsWith('"'))
+  const body = literal.slice(1, -1)
+  assert.doesNotMatch(body, /"/)
+  const bytes = []
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === "\\") {
+      assert.match(body.slice(i + 1, i + 4), /^\d{3}$/)
+      bytes.push(Number(body.slice(i + 1, i + 4)))
+      i += 3
+    } else bytes.push(body.charCodeAt(i))
+  }
+  return Buffer.from(bytes).toString("utf8")
+}
+
+test("focusSelectors prefers the recorded window, then the title, then nothing", () => {
+  assert.deepEqual(Model.focusSelectors({ window: "0xabc123", project: "repo" }), ["address:0xabc123", "title:repo"])
+  assert.deepEqual(Model.focusSelectors({ window: "", project: "repo" }), ["title:repo"])
+  assert.deepEqual(Model.focusSelectors({ window: "not-an-address", project: "repo" }), ["title:repo"])
+  assert.deepEqual(Model.focusSelectors({ window: "0xabc123", project: "" }), ["address:0xabc123"])
+  assert.deepEqual(Model.focusSelectors({ window: "", project: "bad\nselector" }), [])
+  assert.deepEqual(Model.focusSelectors(null), [])
+})
+
+test("focusArgv builds the Lua and classic dispatch forms as one argv each", () => {
+  assert.deepEqual(Model.focusArgv("address:0xabc", "lua"),
+    ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "address:0xabc" })'])
+  assert.deepEqual(Model.focusArgv("address:0xabc", "classic"),
+    ["hyprctl", "dispatch", "focuswindow", "address:0xabc"])
+})
+
+test("focusAttempts tries each selector in Lua form, then classic form", () => {
+  assert.deepEqual(Model.focusAttempts({ window: "0xabc", project: "web" }), [
+    ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "address:0xabc" })'],
+    ["hyprctl", "dispatch", "focuswindow", "address:0xabc"],
+    ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "title:web" })'],
+    ["hyprctl", "dispatch", "focuswindow", "title:web"]
+  ])
+  assert.deepEqual(Model.focusAttempts({ window: "", project: "" }), [])
+})
+
+test("luaString cannot be broken out of, and decodes back to the exact text", () => {
+  for (const text of [
+    'repo"]) os.execute("touch /tmp/pwned") --',
+    "back\\slash", "brackets]]==]", "accent é and emoji 😀", "digits after escape \"1", "!'()*~", "plain repo-name_1.0"
+  ]) {
+    const literal = Model.luaString(text)
+    assert.equal(luaDecode(literal), text, text)
+    assert.doesNotMatch(literal.slice(1, -1), /["\]()\n]/)
+  }
+  assert.equal(Model.luaString("title:plain repo-1.0"), '"title:plain repo-1.0"')
+  assert.equal(Model.luaString(""), '""')
+  assert.equal(Model.luaString(null), '""')
+  assert.equal(Model.luaString("\uD800"), '""')
+})
+
+test("luaString pads every escape to three digits and handles surrogate edges", () => {
+  assert.equal(Model.luaString("a\tb"), '"a\\009b"')
+  assert.equal(Model.luaString("a\nb"), '"a\\010b"')
+  assert.equal(Model.luaString("a\nb").length, '"a\\010b"'.length)
+  for (const text of ["\t1", "\n1", "\u{10000}", "\u{10FFFF}", "x\u{10000}y"]) {
+    assert.equal(luaDecode(Model.luaString(text)), text, JSON.stringify(text))
+  }
+  assert.equal(Model.luaString("\uDC00a"), '"a"')
+  assert.equal(Model.luaString("x\uD800"), '"x"')
+  assert.equal(Model.luaString("a\uD800b"), '"ab"')
+  assert.equal(Model.luaString("!\uDC00"), '"\\033"')
+  assert.equal(luaDecode(Model.luaString("\uD800\uE000")), "\uE000")
+  assert.equal(Model.luaString("a\uDBFFb"), '"ab"')
+  assert.equal(luaDecode(Model.luaString("a\uD800\uD800\uDC00b")), "a\u{10000}b")
+})
+
+test("focusSucceeded is true only when hyprctl reports ok", () => {
+  assert.equal(Model.focusSucceeded("ok\n"), true)
+  assert.equal(Model.focusSucceeded("  ok  "), true)
+  assert.equal(Model.focusSucceeded("No such window found"), false)
+  assert.equal(Model.focusSucceeded("okay"), false)
+  assert.equal(Model.focusSucceeded(""), false)
+  assert.equal(Model.focusSucceeded(undefined), false)
+  assert.equal(Model.focusSucceeded("ok", 0), true)
+  assert.equal(Model.focusSucceeded("ok", 1), false)
+  assert.equal(Model.focusSucceeded("ok", -1), false)
+  assert.equal(Model.focusSucceeded("nope", 0), false)
+})
+
+test("the panel's live and sorted lists keep each session's window", () => {
+  const rows = Model.parseSpool([
+    JSON.stringify({ id: "a", state: "needs_you", cwd: "/p/a", ts: NOW - 1000, window: "0xa1" }),
+    JSON.stringify({ id: "b", state: "working", cwd: "/p/b", ts: NOW - 2000, window: "0xb2" })
+  ].join("\n"))
+  const shown = Model.sortSessions(Model.liveSessions(rows, NOW, 60000))
+  assert.deepEqual(shown.map((r) => [r.id, r.window]), [["a", "0xa1"], ["b", "0xb2"]])
+  assert.deepEqual(Model.focusSelectors(shown[0]), ["address:0xa1", "title:a"])
 })

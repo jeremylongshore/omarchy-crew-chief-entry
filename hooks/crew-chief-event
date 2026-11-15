@@ -12,6 +12,7 @@ set -euo pipefail
 
 SPOOL="${CREW_CHIEF_SPOOL:-}"
 SPOOL_HELPER="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/crew-chief-spool"
+WINDOW_HELPER="$(dirname "$SPOOL_HELPER")/crew-chief-window"
 [[ -x $SPOOL_HELPER ]] || exit 0
 
 payload="$(head -c 16385)"
@@ -45,6 +46,13 @@ case "$event" in
     ;;
 esac
 
+# The hook runs inside the agent's own terminal, so it can record which
+# Hyprland window that terminal is. A row click then focuses that exact window
+# instead of guessing from a title Claude Code keeps renaming. Empty when it
+# cannot tell; the click falls back to the old title match.
+window=""
+if [[ -x $WINDOW_HELPER ]]; then window=$("$WINDOW_HELPER" 2>/dev/null) || window=""; fi
+
 # The secure-state helper pins the parent directory, keeps an exclusive
 # O_NOFOLLOW temporary descriptor through fsync, and publishes atomically.
 jq -cn \
@@ -53,6 +61,7 @@ jq -cn \
   --arg cwd "$cwd" \
   --arg agent "claude-code" \
   --arg message "$message" \
+  --arg window "$window" \
   --argjson ts "$(date +%s%3N)" \
-  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' \
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, window:$window, ts:$ts}' \
   | "$SPOOL_HELPER" write "$SPOOL" "$session_id"

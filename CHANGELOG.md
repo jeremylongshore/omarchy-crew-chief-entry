@@ -10,6 +10,13 @@ Regenerate with `scripts/gen-changelog.sh`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Target the session's own terminal window on a row click, recorded by the reporter, before falling back to a title match that Claude Code's task titles defeat (#7).
+- Say in the panel header when every focus attempt is refused, times out, or cannot start hyprctl, instead of staying silent.
+- Add `scripts/rig-focus-chain.sh`, which loads the shipped click chain in a real Quickshell on the rig against a stand-in hyprctl.
+- Dispatch focus in Hyprland's Lua form first, then the classic form. Hyprland 0.57, which current Omarchy configures in Lua, rejects the classic `focuswindow` string the click used to send.
+
 ## [1.1.0] - 2026-08-29
 
 ### Security

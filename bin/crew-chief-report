@@ -6,6 +6,7 @@
 #   crew-chief-report needs_you [--agent kilo]  [--message "waiting on approval"]
 #   crew-chief-report done      [--agent codex]
 #   crew-chief-report end       # session over -> row removed
+#   crew-chief-report working --window 0x55d3c2a1b2c0   # pin the window to focus
 #
 # Defaults: --id falls back to $CREW_CHIEF_SESSION_ID, then the parent PID
 # (stable for the life of the harness process); --cwd falls back to $PWD;
@@ -17,6 +18,7 @@ set -euo pipefail
 SPOOL="${CREW_CHIEF_SPOOL:-}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SPOOL_HELPER="$SELF_DIR/crew-chief-spool"
+WINDOW_HELPER="$SELF_DIR/crew-chief-window"
 [[ -x $SPOOL_HELPER ]] || { echo "crew-chief-report: spool helper missing" >&2; exit 1; }
 
 state="${1:-}"
@@ -26,6 +28,8 @@ id="${CREW_CHIEF_SESSION_ID:-$PPID}"
 cwd="$PWD"
 agent="${CREW_CHIEF_AGENT:-agent}"
 message=""
+window=""
+window_given=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,6 +37,9 @@ while [[ $# -gt 0 ]]; do
     --cwd) cwd="$2"; shift 2 ;;
     --agent) agent="$2"; shift 2 ;;
     --message) message="$2"; shift 2 ;;
+    --window)
+      [[ $# -ge 2 ]] || { echo "crew-chief-report: --window needs a value" >&2; exit 2; }
+      window="$2"; window_given=1; shift 2 ;;
     *) echo "crew-chief-report: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -53,6 +60,12 @@ case "$state" in
     ;;
 esac
 
+# Without --window, find the Hyprland window this reporter is running in, so a
+# row click can focus it. Empty when it cannot tell (see bin/crew-chief-window).
+if [[ $window_given -eq 0 && -x $WINDOW_HELPER ]]; then
+  window=$("$WINDOW_HELPER" 2>/dev/null) || window=""
+fi
+
 # secure-state owns private creation, bounded validation, locking, retention,
 # no-follow publication, and descriptor-relative cleanup.
 jq -cn \
@@ -61,6 +74,7 @@ jq -cn \
   --arg cwd "$cwd" \
   --arg agent "$agent" \
   --arg message "$message" \
+  --arg window "$window" \
   --argjson ts "$(date +%s%3N)" \
-  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' \
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, window:$window, ts:$ts}' \
   | "$SPOOL_HELPER" write "$SPOOL" "$id"

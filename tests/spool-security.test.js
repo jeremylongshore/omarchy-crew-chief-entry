@@ -150,3 +150,13 @@ test("concurrent writers serialize and publish only complete JSON records", asyn
   assert.equal(records.length, 24)
   for (const name of records) assert.doesNotThrow(() => JSON.parse(fs.readFileSync(path.join(spool, name))))
 })
+
+test("window is optional, kept only as an address, and must be a string", (t) => {
+  const spool = tempRoot(t, "crew-chief-window-")
+  const record = (window) => JSON.stringify({ id: "w", state: "working", cwd: "/p/demo", agent: "codex", message: "", window, ts: Date.now() })
+  assert.equal(run("write", spool, "w", record("0x55d3c2a1b2c0")).status, 0)
+  assert.equal(JSON.parse(fs.readFileSync(path.join(spool, "w.json"), "utf8")).window, "0x55d3c2a1b2c0")
+  assert.equal(run("write", spool, "w", record("0xnot hex")).status, 0)
+  assert.equal(JSON.parse(fs.readFileSync(path.join(spool, "w.json"), "utf8")).window, undefined)
+  assert.notEqual(run("write", spool, "w", record({ address: "0x1" })).status, 0)
+})

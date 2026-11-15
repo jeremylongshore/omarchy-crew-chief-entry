@@ -105,8 +105,17 @@ candidate names, opens only regular same-owner files without following links, re
 
 - **Rows sort attention-first**. The session that's waited longest on you is on top,
   with its reporter-supplied attention headline under the project name.
-- **Left-click a row**: best-effort jump to that project's terminal window
-  (`hyprctl dispatch focuswindow`).
+- **Left-click a row**: try to focus the terminal window the session reported
+  from. This is best effort. The reporter records which Hyprland window it is running in, and the
+  click focuses that window by address. When no window was recorded, or it has
+  closed, the click falls back to matching the project name in the window
+  title. Each attempt uses Hyprland's Lua dispatch form first (Hyprland 0.57
+  and current Omarchy), then the classic `focuswindow` form for older
+  releases. When every attempt is refused, the panel header says so for a few
+  seconds.
+  - The window can't be recorded inside tmux or zellij, or in a terminal that
+    runs every window from one process, such as `foot --server`, kitty in
+    single-instance mode or WezTerm. Those sessions use the title match.
 - **Right-click a row**: dismiss it from the list.
 - **CLEAR FINISHED**: sweep away all `DONE` rows at once.
 - Stale sessions (no event for 4h, configurable) drop off automatically.

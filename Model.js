@@ -123,6 +123,7 @@ function parseSpool(raw) {
       project: projectName(cwd),
       agent: String(row.agent || ""),
       message: String(row.message || ""),
+      window: windowAddress(row.window),
       ts: Number(row.ts) || 0
     })
   }
@@ -149,6 +150,92 @@ function focusTarget(project) {
   var value = String(project || "").trim()
   if (!value || /[\x00-\x1F\x7F]/.test(value)) return ""
   return value.slice(0, 120)
+}
+
+// A Hyprland window address exactly as `hyprctl clients -j` prints it
+// ("0x55d3c2a1b2c0"), or "" for anything else, including a non-string. The
+// value comes from whoever wrote the spool record, so it is checked here
+// before it reaches hyprctl.
+function windowAddress(value) {
+  if (typeof value !== "string") return ""
+  return /^0x[0-9a-fA-F]{1,16}$/.test(value) ? value : ""
+}
+
+// Window selectors to try for one session, best first. The address the
+// session's own reporter recorded names the exact terminal window. The title
+// match is the fallback for reporters that could not see a window, and it only
+// works while the terminal title still contains the project folder (issue #7:
+// Claude Code renames its terminal to the current task).
+function focusSelectors(session) {
+  if (!session) return []
+  var out = []
+  var address = windowAddress(session.window)
+  if (address) out.push("address:" + address)
+  var target = focusTarget(session.project)
+  if (target) out.push("title:" + target)
+  return out
+}
+
+function pad3(n) {
+  return n < 10 ? "00" + n : (n < 100 ? "0" + n : String(n))
+}
+
+// A Lua string literal for text that Hyprland evaluates as Lua. Every byte
+// outside a plain safe set becomes a three-digit \ddd escape, so a project name
+// can never close the string and inject code the compositor would run.
+function luaString(text) {
+  var value = String(text || "")
+  var out = ""
+  for (var i = 0; i < value.length; i++) {
+    var ch = value.charAt(i)
+    if (/[A-Za-z0-9 ._:-]/.test(ch)) { out += ch; continue }
+    var chunk = ch
+    var code = value.charCodeAt(i)
+    if (code >= 0xD800 && code <= 0xDBFF && i + 1 < value.length) {
+      var low = value.charCodeAt(i + 1)
+      if (low >= 0xDC00 && low <= 0xDFFF) {
+        chunk = value.substr(i, 2)
+        i++
+      }
+    }
+    var encoded
+    try { encoded = encodeURIComponent(chunk) } catch (e) { continue }
+    if (encoded === chunk) { out += "\\" + pad3(chunk.charCodeAt(0)); continue }
+    var bytes = encoded.split("%")
+    for (var j = 1; j < bytes.length; j++) out += "\\" + pad3(parseInt(bytes[j], 16))
+  }
+  return '"' + out + '"'
+}
+
+// The hyprctl argv for one focus attempt. Hyprland 0.57 and later, which
+// current Omarchy configures in Lua, takes `hl.dsp.focus({ window = ... })`;
+// earlier releases take `focuswindow <selector>`. Each argv is one process
+// argument list, so nothing passes through a shell.
+function focusArgv(selector, style) {
+  if (style === "classic") return ["hyprctl", "dispatch", "focuswindow", selector]
+  return ["hyprctl", "dispatch", "hl.dsp.focus({ window = " + luaString(selector) + " })"]
+}
+
+// Every attempt a row click may make, in order: each selector in the Lua form,
+// then the classic form, the same order Omarchy's own launch-or-focus scripts
+// use. The panel runs them until hyprctl reports ok.
+function focusAttempts(session) {
+  var selectors = focusSelectors(session)
+  var out = []
+  for (var i = 0; i < selectors.length; i++) {
+    out.push(focusArgv(selectors[i], "lua"))
+    out.push(focusArgv(selectors[i], "classic"))
+  }
+  return out
+}
+
+// `hyprctl dispatch` prints "ok" when it acted. On Hyprland 0.57 a window that
+// is not found prints an error instead, as does a dispatch form the running
+// Hyprland does not understand, so the panel moves on to the next attempt. A
+// known non-zero exit code is a failure even if stdout says ok.
+function focusSucceeded(output, exitCode) {
+  if (typeof exitCode === "number" && exitCode !== 0) return false
+  return String(output || "").trim() === "ok"
 }
 
 // Sessions with no event inside staleMs are treated as gone (crashed shell,
@@ -223,6 +310,12 @@ if (typeof module !== "undefined") {
     parseSpool: parseSpool,
     projectName: projectName,
     focusTarget: focusTarget,
+    windowAddress: windowAddress,
+    focusSelectors: focusSelectors,
+    luaString: luaString,
+    focusArgv: focusArgv,
+    focusAttempts: focusAttempts,
+    focusSucceeded: focusSucceeded,
     liveSessions: liveSessions,
     sortSessions: sortSessions,
     summarize: summarize,
