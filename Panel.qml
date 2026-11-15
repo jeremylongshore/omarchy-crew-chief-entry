@@ -2,6 +2,9 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+// Qt 6.12 adds its own Color type, so Omarchy's palette singleton must be
+// qualified (docs/omarchy-shell.md, Theme tokens).
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -265,14 +268,14 @@ Panel {
                     ? "  ·  +" + root.spoolHidden + " not shown"
                     : "")
                  + (focusChain.notice !== "" ? "  ·  " + focusChain.notice : ""))
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
 
             iconComponent: Component {
               Text {
                 text: "󰋎"
                 color: root.needsAttention && root.bar ? root.bar.urgent
-                  : (root.bar ? root.bar.foreground : Color.foreground)
+                  : (root.bar ? root.bar.foreground : Commons.Color.foreground)
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.display
               }
@@ -281,7 +284,7 @@ Panel {
 
           PanelSeparator {
             visible: root.visibleList.length > 0
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
           }
 
           // ---- Session rows, attention first.
@@ -294,7 +297,7 @@ Panel {
               required property var modelData
               readonly property bool blocked: modelData.state === "needs_you"
               readonly property bool selected: index === root.selIdx
-              readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
+              readonly property color fg: root.bar ? root.bar.foreground : Commons.Color.foreground
               width: contentColumn.width
               height: rowCol.implicitHeight + Style.space(10)
 
@@ -304,7 +307,7 @@ Panel {
                 anchors.rightMargin: Style.space(8)
                 radius: Style.cornerRadius
                 color: row.selected || rowArea.containsMouse
-                  ? Style.hoverFillFor(row.fg, Color.accent) : "transparent"
+                  ? Style.hoverFillFor(row.fg, Commons.Color.accent) : "transparent"
               }
 
               Column {
@@ -326,7 +329,7 @@ Panel {
                     height: Style.space(8)
                     radius: width / 2
                     anchors.verticalCenter: parent.verticalCenter
-                    color: row.blocked ? (root.bar ? root.bar.urgent : Color.urgent)
+                    color: row.blocked ? (root.bar ? root.bar.urgent : Commons.Color.urgent)
                       : modelData.state === "done" ? Qt.darker(row.fg, 1.6) : row.fg
 
                     SequentialAnimation on opacity {
@@ -377,7 +380,7 @@ Panel {
                     textFormat: Text.PlainText
                     width: Math.min(implicitWidth, parent.width * 0.2)
                     elide: Text.ElideRight
-                    color: row.blocked ? (root.bar ? root.bar.urgent : Color.urgent) : Qt.darker(row.fg, 1.4)
+                    color: row.blocked ? (root.bar ? root.bar.urgent : Commons.Color.urgent) : Qt.darker(row.fg, 1.4)
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption
                     font.letterSpacing: 1
@@ -447,8 +450,8 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
               text: "CLEAR FINISHED"
               color: clearArea.containsMouse
-                ? (root.bar ? root.bar.foreground : Color.foreground)
-                : Qt.darker(root.bar ? root.bar.foreground : Color.foreground, 1.4)
+                ? (root.bar ? root.bar.foreground : Commons.Color.foreground)
+                : Qt.darker(root.bar ? root.bar.foreground : Commons.Color.foreground, 1.4)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
               font.letterSpacing: 1

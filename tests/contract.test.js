@@ -61,3 +61,13 @@ test("presentation proof is fail-closed and hash-bound", () => {
   }
   assert.match(text("scripts/approve-preview.sh"), /sha256sum/)
 })
+
+test("QML qualifies Omarchy's palette as Commons.Color, never bare Color", () => {
+  // Qt 6.12 introduces its own Color type; omarchy docs/omarchy-shell.md
+  // (Theme tokens) requires plugins to import qs.Commons with an alias.
+  for (const file of ["BarWidget.qml", "Panel.qml", "FocusChain.qml"]) {
+    const source = text(file)
+    assert.doesNotMatch(source, /(^|[^\w.])Color\./m, file + " uses bare Color")
+    if (/Commons\.Color\./.test(source)) assert.match(source, /^import qs\.Commons as Commons$/m, file)
+  }
+})
