@@ -10,8 +10,11 @@ Regenerate with `scripts/gen-changelog.sh`.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-15
+
 ### Fixed
 
+- Qualify Omarchy's palette as `Commons.Color`, as the shell contract requires now that Qt 6.12 has its own `Color` type.
 - Target the session's own terminal window on a row click, recorded by the reporter, before falling back to a title match that Claude Code's task titles defeat (#7).
 - Say in the panel header when every focus attempt is refused, times out, or cannot start hyprctl, instead of staying silent.
 - Add `scripts/rig-focus-chain.sh`, which loads the shipped click chain in a real Quickshell on the rig against a stand-in hyprctl.
