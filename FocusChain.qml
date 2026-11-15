@@ -29,7 +29,8 @@ Item {
   property var queue: []
   // True from the moment an attempt is launched until its exit is handled.
   property bool awaitingExit: false
-  // Every argv this chain launched, for the rig harness to inspect.
+  // The argv list of every attempt in the current click, for the rig harness to
+  // inspect. Reset on each click, so a long-lived shell never accumulates it.
   property var launched: []
   property int attemptTimeoutMs: 3000
   property bool terminateSent: false
@@ -44,6 +45,7 @@ Item {
       return
     }
     notice = ""
+    launched = []
     queue = attempts.slice(1)
     launch(attempts[0])
   }

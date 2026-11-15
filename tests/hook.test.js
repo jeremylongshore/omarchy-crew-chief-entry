@@ -291,3 +291,12 @@ test("reporter refuses --window without a value instead of crashing", (t) => {
   assert.match(result.stderr, /--window needs a value/)
   assert.equal(fs.existsSync(path.join(spool, "r9.json")), false)
 })
+
+test("window helper refuses a client list with too many entries, even malformed ones", (t) => {
+  const helper = path.join(__dirname, "..", "bin", "crew-chief-window")
+  const junk = Array.from({ length: 2100 }, (_, i) => ({ junk: i }))
+  const env = fakeHyprctl(t, [...junk, { address: "0xbeef", pid: process.pid }])
+  assert.equal(execFileSync(helper, [String(process.pid)], { env, encoding: "utf8" }), "")
+  const fine = fakeHyprctl(t, [...junk.slice(0, 100), { address: "0xbeef", pid: process.pid }])
+  assert.equal(execFileSync(helper, [String(process.pid)], { env: fine, encoding: "utf8" }).trim(), "0xbeef")
+})

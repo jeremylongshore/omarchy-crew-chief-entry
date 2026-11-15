@@ -41,9 +41,13 @@ while read -r pid address; do
   [[ $pid =~ ^[0-9]{1,10}$ ]] || continue
   owner[$pid]=$address
 done < <(timeout 2 jq -r '
-  [.[]? | select((.pid | type) == "number" and (.address | type) == "string")]
-  | if length > 2048 then empty else group_by(.pid)[] end
-  | "\(.[0].pid) \(if length == 1 then .[0].address else "AMBIGUOUS" end)"
+  # Bound the raw client count before filtering, so a flood of malformed
+  # entries is refused rather than walked.
+  if (type != "array") or (length > 2048) then empty else
+    [.[] | select((.pid | type) == "number" and (.address | type) == "string")]
+    | group_by(.pid)[]
+    | "\(.[0].pid) \(if length == 1 then .[0].address else "AMBIGUOUS" end)"
+  end
 ' <<<"$clients" 2>/dev/null)
 
 pid=$start
