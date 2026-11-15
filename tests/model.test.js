@@ -303,6 +303,17 @@ test("luaString cannot be broken out of, and decodes back to the exact text", ()
   assert.equal(Model.luaString("\uD800"), '""')
 })
 
+test("luaString pads every escape to three digits and handles surrogate edges", () => {
+  assert.equal(Model.luaString("a\tb"), '"a\\009b"')
+  assert.equal(Model.luaString("a\nb"), '"a\\010b"')
+  assert.equal(Model.luaString("a\nb").length, '"a\\010b"'.length)
+  for (const text of ["\t1", "\n1", "\u{10000}", "\u{10FFFF}", "x\u{10000}y"]) {
+    assert.equal(luaDecode(Model.luaString(text)), text, JSON.stringify(text))
+  }
+  assert.equal(Model.luaString("\uDC00a"), '"a"')
+  assert.equal(Model.luaString("x\uD800"), '"x"')
+})
+
 test("focusSucceeded is true only when hyprctl reports ok", () => {
   assert.equal(Model.focusSucceeded("ok\n"), true)
   assert.equal(Model.focusSucceeded("  ok  "), true)
