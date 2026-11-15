@@ -248,3 +248,18 @@ test("reporter takes an explicit window and the spool drops a malformed one", (t
   assert.equal(readSpool(spool, "r2").window, undefined)
   assert.equal(readSpool(spool, "r2").state, "working")
 })
+
+test("window helper walks from an explicit start pid and ignores a bad one", (t) => {
+  const helper = path.join(__dirname, "..", "bin", "crew-chief-window")
+  const env = fakeHyprctl(t, [{ address: "0xbeef", pid: process.pid }])
+  assert.equal(execFileSync(helper, [String(process.pid)], { env, encoding: "utf8" }).trim(), "0xbeef")
+  assert.equal(execFileSync(helper, ["not-a-pid"], { env, encoding: "utf8" }), "")
+  assert.equal(execFileSync(helper, ["1"], { env, encoding: "utf8" }), "")
+})
+
+test("window helper gives up on an oversized client list instead of parsing a prefix", (t) => {
+  const helper = path.join(__dirname, "..", "bin", "crew-chief-window")
+  const pad = "x".repeat(1100000)
+  const env = fakeHyprctl(t, [{ address: "0xbeef", pid: process.pid, title: pad }])
+  assert.equal(execFileSync(helper, [String(process.pid)], { env, encoding: "utf8" }), "")
+})

@@ -232,6 +232,9 @@ test("windowAddress keeps only hyprctl-style window addresses", () => {
   assert.equal(Model.windowAddress("0x12; rm -rf ~"), "")
   assert.equal(Model.windowAddress(" 0x12"), "")
   assert.equal(Model.windowAddress(null), "")
+  assert.equal(Model.windowAddress(["0xabc"]), "")
+  assert.equal(Model.windowAddress({ toString: () => "0xabc" }), "")
+  assert.equal(Model.windowAddress(0xabc), "")
 })
 
 test("parseSpool carries a recorded window and drops a forged one", () => {
@@ -243,16 +246,61 @@ test("parseSpool carries a recorded window and drops a forged one", () => {
   assert.deepEqual(rows.map((r) => r.window), ["0xabc123", "", ""])
 })
 
-test("focusCommand prefers the recorded window, then the title, then nothing", () => {
-  assert.deepEqual(Model.focusCommand({ window: "0xabc123", project: "repo" }),
-    ["hyprctl", "dispatch", "focuswindow", "address:0xabc123"])
-  assert.deepEqual(Model.focusCommand({ window: "", project: "repo" }),
-    ["hyprctl", "dispatch", "focuswindow", "title:repo"])
-  assert.deepEqual(Model.focusCommand({ window: "not-an-address", project: "repo" }),
-    ["hyprctl", "dispatch", "focuswindow", "title:repo"])
-  assert.deepEqual(Model.focusCommand({ window: "", project: "bad\nselector" }), [])
-  assert.deepEqual(Model.focusCommand({ window: "", project: "" }), [])
-  assert.deepEqual(Model.focusCommand(null), [])
+// Decode a Lua string literal the way Lua does for the escapes luaString emits.
+function luaDecode(literal) {
+  assert.ok(literal.startsWith('"') && literal.endsWith('"'))
+  const body = literal.slice(1, -1)
+  assert.doesNotMatch(body, /"/)
+  const bytes = []
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === "\\") {
+      assert.match(body.slice(i + 1, i + 4), /^\d{3}$/)
+      bytes.push(Number(body.slice(i + 1, i + 4)))
+      i += 3
+    } else bytes.push(body.charCodeAt(i))
+  }
+  return Buffer.from(bytes).toString("utf8")
+}
+
+test("focusSelectors prefers the recorded window, then the title, then nothing", () => {
+  assert.deepEqual(Model.focusSelectors({ window: "0xabc123", project: "repo" }), ["address:0xabc123", "title:repo"])
+  assert.deepEqual(Model.focusSelectors({ window: "", project: "repo" }), ["title:repo"])
+  assert.deepEqual(Model.focusSelectors({ window: "not-an-address", project: "repo" }), ["title:repo"])
+  assert.deepEqual(Model.focusSelectors({ window: "0xabc123", project: "" }), ["address:0xabc123"])
+  assert.deepEqual(Model.focusSelectors({ window: "", project: "bad\nselector" }), [])
+  assert.deepEqual(Model.focusSelectors(null), [])
+})
+
+test("focusArgv builds the Lua and classic dispatch forms as one argv each", () => {
+  assert.deepEqual(Model.focusArgv("address:0xabc", "lua"),
+    ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "address:0xabc" })'])
+  assert.deepEqual(Model.focusArgv("address:0xabc", "classic"),
+    ["hyprctl", "dispatch", "focuswindow", "address:0xabc"])
+})
+
+test("focusAttempts tries each selector in Lua form, then classic form", () => {
+  assert.deepEqual(Model.focusAttempts({ window: "0xabc", project: "web" }), [
+    ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "address:0xabc" })'],
+    ["hyprctl", "dispatch", "focuswindow", "address:0xabc"],
+    ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "title:web" })'],
+    ["hyprctl", "dispatch", "focuswindow", "title:web"]
+  ])
+  assert.deepEqual(Model.focusAttempts({ window: "", project: "" }), [])
+})
+
+test("luaString cannot be broken out of, and decodes back to the exact text", () => {
+  for (const text of [
+    'repo"]) os.execute("touch /tmp/pwned") --',
+    "back\\slash", "brackets]]==]", "accent é and emoji 😀", "digits after escape \"1", "!'()*~", "plain repo-name_1.0"
+  ]) {
+    const literal = Model.luaString(text)
+    assert.equal(luaDecode(literal), text, text)
+    assert.doesNotMatch(literal.slice(1, -1), /["\]()\n]/)
+  }
+  assert.equal(Model.luaString("title:plain repo-1.0"), '"title:plain repo-1.0"')
+  assert.equal(Model.luaString(""), '""')
+  assert.equal(Model.luaString(null), '""')
+  assert.equal(Model.luaString("\uD800"), '""')
 })
 
 test("focusSucceeded is true only when hyprctl reports ok", () => {

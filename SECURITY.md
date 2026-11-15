@@ -35,9 +35,12 @@ All state operations go through `bin/crew-chief-spool`:
 The QML model repeats the file-count, session-count, and byte bounds. It marks a
 partial census visibly instead of presenting an incomplete fleet as complete.
 Every data-bound `Text` is plain text and length-capped. Window focusing passes
-one validated argument to `hyprctl`; no shell evaluates it. A recorded window
-must be a hexadecimal Hyprland address, checked by both the spool writer and the
-QML model; a title fallback is control-free and length-capped.
+one argv to `hyprctl`; no shell evaluates it. A recorded window must be a
+hexadecimal Hyprland address, checked by both the spool writer and the QML
+model; a title fallback is control-free and length-capped. Hyprland's Lua
+dispatch form is evaluated as Lua by the compositor, so the selector is written
+as a Lua string with every byte outside letters, digits, space and `._:-`
+escaped as `\ddd`, and a project name cannot close the string.
 
 ## External effects
 

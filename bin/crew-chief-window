@@ -20,13 +20,19 @@
 #
 # Usage: crew-chief-window [START_PID]   (defaults to the caller's PID)
 set -uo pipefail
+export LC_ALL=C   # ${#var} counts bytes, not characters
 
 start="${1:-$PPID}"
 [[ $start =~ ^[0-9]{1,10}$ ]] || exit 0
 command -v hyprctl >/dev/null 2>&1 || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
-clients=$(timeout 1 hyprctl clients -j 2>/dev/null) || exit 0
-[[ ${#clients} -le 1048576 ]] || exit 0
+# Window titles are application-controlled, so the client list can be made
+# arbitrarily large. Read at most 1 MiB plus one byte while streaming, and give
+# up rather than parse a truncated prefix. With pipefail a hyprctl that is cut
+# off by head, or fails, also ends here.
+MAX_BYTES=1048576
+clients=$(timeout 1 hyprctl clients -j 2>/dev/null | head -c $((MAX_BYTES + 1))) || exit 0
+((${#clients} <= MAX_BYTES)) || exit 0
 
 # One line per window-owning PID: "PID ADDRESS", or "PID AMBIGUOUS" when that
 # process owns several windows.
@@ -36,7 +42,7 @@ while read -r pid address; do
   owner[$pid]=$address
 done < <(timeout 2 jq -r '
   [.[]? | select((.pid | type) == "number" and (.address | type) == "string")]
-  | group_by(.pid)[]
+  | if length > 2048 then empty else group_by(.pid)[] end
   | "\(.[0].pid) \(if length == 1 then .[0].address else "AMBIGUOUS" end)"
 ' <<<"$clients" 2>/dev/null)
 

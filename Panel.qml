@@ -56,6 +56,8 @@ Panel {
   // Set for a few seconds when a row click focused nothing, so the click is
   // never silent (issue #7).
   property string focusNotice: ""
+  // Remaining hyprctl attempts for the click in progress (Model.focusAttempts).
+  property var focusQueue: []
 
   // How many sessions exist that the bounded reader did not return, so the hero
   // can name the gap instead of hinting at one.
@@ -144,15 +146,37 @@ Panel {
       if (rows[i].state === "done") dismiss(rows[i].id)
   }
 
-  // Focus the window the session's reporter recorded, falling back to a title
-  // match. Model.focusCommand validates the record and returns one argv, so
-  // quotes and shell metacharacters stay literal data.
+  // Focus the window the session's reporter recorded, then fall back to a title
+  // match, each in Hyprland's Lua form and then its classic form. Every attempt
+  // is one validated argv, so nothing passes through a shell.
   function focusSession(session) {
-    var argv = Model.focusCommand(session)
-    if (argv.length === 0 || focusProc.running) return
+    if (focusProc.running) return
+    var attempts = Model.focusAttempts(session)
+    if (attempts.length === 0) {
+      showFocusNotice("no window recorded for that session")
+      return
+    }
     focusNotice = ""
-    focusProc.command = argv
+    focusQueue = attempts.slice(1)
+    focusProc.command = attempts[0]
+    focusProc.awaitingExit = true
     focusProc.running = true
+  }
+
+  function nextFocusAttempt() {
+    if (focusQueue.length === 0) {
+      showFocusNotice("couldn't find that session's window")
+      return
+    }
+    focusProc.command = focusQueue[0]
+    focusQueue = focusQueue.slice(1)
+    focusProc.awaitingExit = true
+    focusProc.running = true
+  }
+
+  function showFocusNotice(text) {
+    focusNotice = text
+    focusNoticeTimer.restart()
   }
 
   Process {
@@ -192,15 +216,33 @@ Panel {
     }
   }
 
+  // Quickshell ends the stdout stream before it emits exited, so the reply is
+  // captured first and acted on at exit, the same chaining dismissProc uses.
+  // A binary that fails to start emits neither, only runningChanged, while the
+  // attempt the panel launched is still awaiting its exit; that is reported too.
   Process {
     id: focusProc
+    property string reply: ""
+    property bool awaitingExit: false
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: {
-        if (Model.focusSucceeded(text)) return
-        root.focusNotice = "couldn't find that session's window"
-        focusNoticeTimer.restart()
+      onStreamFinished: focusProc.reply = text
+    }
+    onExited: {
+      awaitingExit = false
+      var ok = Model.focusSucceeded(reply)
+      reply = ""
+      if (ok) {
+        root.focusQueue = []
+        return
       }
+      root.nextFocusAttempt()
+    }
+    onRunningChanged: {
+      if (running || !awaitingExit) return
+      awaitingExit = false
+      root.focusQueue = []
+      root.showFocusNotice("hyprctl did not start")
     }
   }
 

@@ -1,9 +1,11 @@
 # Crew Chief spool protocol
 
 One bounded JSON object represents one local agent session. Required fields are
-`id`, `state`, and `ts`; optional fields are `cwd`, `agent`, and
-`message`. `state` is `working`, `needs_you`, or `done`. Unknown states
-normalize to `working`.
+`id`, `state`, and `ts`; optional fields are `cwd`, `agent`, `message`,
+and `window`. `state` is `working`, `needs_you`, or `done`. Unknown states
+normalize to `working`. `window` is the Hyprland address of the session's
+terminal window, `0x` plus 1 to 16 hex digits; the writer and the reader both
+drop any other value, and a record without it remains valid.
 
 Writers must invoke `bin/crew-chief-report` or `bin/crew-chief-spool write`;
 they must not create spool files directly. Identifiers accept only ASCII

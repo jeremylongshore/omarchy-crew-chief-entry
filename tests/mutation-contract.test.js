@@ -29,9 +29,10 @@ test("the public Crew Chief model has a deterministic behavioral signature", () 
     ages: [0, 60000, 3600000, 86400000].map(delta => Model.ageText(now - delta, now)),
     project: Model.projectName("/p/demo///"),
     focus: Model.focusTarget(" demo repo "),
-    focusCommands: [rows[0], rows[1], null].map(Model.focusCommand),
+    focusAttempts: [rows[0], rows[1], null].map(Model.focusAttempts),
+    luaEscape: Model.luaString('a"b]]\\ é'),
     focusResults: ["ok\n", "No such window found", ""].map(Model.focusSucceeded)
   }
   const digest = crypto.createHash("sha256").update(JSON.stringify(signature)).digest("hex")
-  assert.equal(digest, "29a3b355b5f90f808b700c5a03d4d9ef61c3e10203b57297c575bc04b73a5eb5")
+  assert.equal(digest, "9cfa34c370fb29f9840cccc3bb859e80a5ae9f9bd73713609625ef76f3edc8b9")
 })

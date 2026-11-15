@@ -13,7 +13,8 @@ Regenerate with `scripts/gen-changelog.sh`.
 ### Fixed
 
 - Focus the session's own terminal window on a row click, recorded by the reporter, instead of a title match that Claude Code's task titles defeat (#7).
-- Say in the panel header when a click focused nothing, instead of staying silent.
+- Say in the panel header when hyprctl refuses every focus attempt, instead of staying silent.
+- Dispatch focus in Hyprland's Lua form first, then the classic form. Hyprland 0.57, which current Omarchy configures in Lua, rejects the classic `focuswindow` string the click used to send.
 
 ## [1.1.0] - 2026-08-29
 
