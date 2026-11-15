@@ -53,7 +53,7 @@ jobs:
         if: steps.scope.outputs.run_full == 'true'
         run: >-
           shellcheck --severity=warning hooks/* adapters/*
-          bin/crew-chief-report bin/read-spool
+          bin/crew-chief-report bin/read-spool bin/crew-chief-window
           scripts/*.sh e2e/*.sh .githooks/pre-push
       - name: Perl spool helper syntax
         if: steps.scope.outputs.run_full == 'true'

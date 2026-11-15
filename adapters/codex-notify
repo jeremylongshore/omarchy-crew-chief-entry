@@ -13,6 +13,7 @@ set -euo pipefail
 
 SPOOL="${CREW_CHIEF_SPOOL:-}"
 SPOOL_HELPER="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/crew-chief-spool"
+WINDOW_HELPER="$(dirname "$SPOOL_HELPER")/crew-chief-window"
 [[ -x $SPOOL_HELPER ]] || exit 0
 
 payload="${1:-}"
@@ -36,6 +37,10 @@ case "$type" in
   *) exit 0 ;;
 esac
 
+# Codex runs this notifier inside its own terminal, so record that window.
+window=""
+if [[ -x $WINDOW_HELPER ]]; then window=$("$WINDOW_HELPER" 2>/dev/null) || window=""; fi
+
 # secure-state publishes through a private, exclusive, no-follow descriptor.
 jq -cn \
   --arg id "$id" \
@@ -43,6 +48,7 @@ jq -cn \
   --arg cwd "$cwd" \
   --arg agent "codex" \
   --arg message "" \
+  --arg window "$window" \
   --argjson ts "$(date +%s%3N)" \
-  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, ts:$ts}' \
+  '{id:$id, state:$state, cwd:$cwd, agent:$agent, message:$message, window:$window, ts:$ts}' \
   | "$SPOOL_HELPER" write "$SPOOL" "$id"

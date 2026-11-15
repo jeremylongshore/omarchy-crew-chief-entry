@@ -123,6 +123,7 @@ function parseSpool(raw) {
       project: projectName(cwd),
       agent: String(row.agent || ""),
       message: String(row.message || ""),
+      window: windowAddress(row.window),
       ts: Number(row.ts) || 0
     })
   }
@@ -149,6 +150,36 @@ function focusTarget(project) {
   var value = String(project || "").trim()
   if (!value || /[\x00-\x1F\x7F]/.test(value)) return ""
   return value.slice(0, 120)
+}
+
+// A Hyprland window address exactly as `hyprctl clients -j` prints it
+// ("0x55d3c2a1b2c0"), or "" for anything else. The value comes from whoever
+// wrote the spool record, so it is checked here before it reaches hyprctl.
+function windowAddress(value) {
+  var text = String(value || "")
+  return /^0x[0-9a-fA-F]{1,16}$/.test(text) ? text : ""
+}
+
+// The hyprctl argv a row click runs, or [] when there is nothing to focus.
+//
+// The address the session's own reporter recorded names the exact terminal
+// window, so it wins. The title match is the fallback for reporters that could
+// not see a window, and it only works while the terminal title still contains
+// the project folder (issue #7: Claude Code renames its terminal to the task).
+function focusCommand(session) {
+  if (!session) return []
+  var address = windowAddress(session.window)
+  if (address) return ["hyprctl", "dispatch", "focuswindow", "address:" + address]
+  var target = focusTarget(session.project)
+  if (target) return ["hyprctl", "dispatch", "focuswindow", "title:" + target]
+  return []
+}
+
+// `hyprctl dispatch` prints "ok" when it acted. Anything else, including no
+// output at all when hyprctl is missing, means no window was focused, and the
+// panel says so instead of leaving the click silent.
+function focusSucceeded(output) {
+  return String(output || "").trim() === "ok"
 }
 
 // Sessions with no event inside staleMs are treated as gone (crashed shell,
@@ -223,6 +254,9 @@ if (typeof module !== "undefined") {
     parseSpool: parseSpool,
     projectName: projectName,
     focusTarget: focusTarget,
+    windowAddress: windowAddress,
+    focusCommand: focusCommand,
+    focusSucceeded: focusSucceeded,
     liveSessions: liveSessions,
     sortSessions: sortSessions,
     summarize: summarize,

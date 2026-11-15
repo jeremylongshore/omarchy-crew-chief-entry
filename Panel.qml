@@ -53,6 +53,9 @@ Panel {
   // Set when the last read hit a bound, so the hero can say the fleet shown is
   // partial instead of pretending it is complete.
   property bool spoolTruncated: false
+  // Set for a few seconds when a row click focused nothing, so the click is
+  // never silent (issue #7).
+  property string focusNotice: ""
 
   // How many sessions exist that the bounded reader did not return, so the hero
   // can name the gap instead of hinting at one.
@@ -98,7 +101,7 @@ Panel {
 
   function activateSelected() {
     if (visibleList.length === 0) return
-    focusProject(visibleList[selIdx].project)
+    focusSession(visibleList[selIdx])
   }
 
   function dismissSelected() {
@@ -141,12 +144,14 @@ Panel {
       if (rows[i].state === "done") dismiss(rows[i].id)
   }
 
-  // Project labels originate in hook-written records. Give hyprctl one argv
-  // item so quotes and shell metacharacters remain literal title text.
-  function focusProject(project) {
-    var target = Model.focusTarget(project)
-    if (target === "" || focusProc.running) return
-    focusProc.command = ["hyprctl", "dispatch", "focuswindow", "title:" + target]
+  // Focus the window the session's reporter recorded, falling back to a title
+  // match. Model.focusCommand validates the record and returns one argv, so
+  // quotes and shell metacharacters stay literal data.
+  function focusSession(session) {
+    var argv = Model.focusCommand(session)
+    if (argv.length === 0 || focusProc.running) return
+    focusNotice = ""
+    focusProc.command = argv
     focusProc.running = true
   }
 
@@ -187,7 +192,23 @@ Panel {
     }
   }
 
-  Process { id: focusProc }
+  Process {
+    id: focusProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        if (Model.focusSucceeded(text)) return
+        root.focusNotice = "couldn't find that session's window"
+        focusNoticeTimer.restart()
+      }
+    }
+  }
+
+  Timer {
+    id: focusNoticeTimer
+    interval: 5000
+    onTriggered: root.focusNotice = ""
+  }
 
   Timer {
     interval: root.pollSec * 1000
@@ -266,7 +287,8 @@ Panel {
                  + root.summary.done + " done"
                  + (root.spoolTruncated && root.spoolHidden > 0
                     ? "  ·  +" + root.spoolHidden + " not shown"
-                    : ""))
+                    : "")
+                 + (root.focusNotice !== "" ? "  ·  " + root.focusNotice : ""))
             foreground: root.bar ? root.bar.foreground : Color.foreground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
 
@@ -428,9 +450,9 @@ Panel {
                     root.dismiss(row.modelData.id)
                     return
                   }
-                  // Best-effort jump to the terminal running this project.
-                  if (root.bar && row.modelData.project !== "")
-                    root.focusProject(row.modelData.project)
+                  // Jump to the terminal window running this session.
+                  if (root.bar)
+                    root.focusSession(row.modelData)
                 }
               }
             }

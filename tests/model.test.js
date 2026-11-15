@@ -161,7 +161,7 @@ test("parseSpool preserves exact limits and normalizes every public field", () =
   assert.equal(rows.length, Model.MAX_SESSIONS)
   assert.equal(Model.spoolTruncated(), false)
   assert.deepEqual(rows[0], {
-    id: "1", state: "working", cwd: "", project: "", agent: "", message: "", ts: 0
+    id: "1", state: "working", cwd: "", project: "", agent: "", message: "", window: "", ts: 0
   })
 })
 
@@ -221,4 +221,45 @@ test("parseSpool survives a mid-file truncation without leaking garbage", () => 
   for (const bad of ["", null, undefined, "not json", "  "]) {
     assert.ok(Array.isArray(Model.parseSpool(bad)))
   }
+})
+
+test("windowAddress keeps only hyprctl-style window addresses", () => {
+  assert.equal(Model.windowAddress("0x55d3c2a1b2c0"), "0x55d3c2a1b2c0")
+  assert.equal(Model.windowAddress("0xABCDEF"), "0xABCDEF")
+  assert.equal(Model.windowAddress("0x"), "")
+  assert.equal(Model.windowAddress("0x" + "f".repeat(17)), "")
+  assert.equal(Model.windowAddress("55d3c2a1b2c0"), "")
+  assert.equal(Model.windowAddress("0x12; rm -rf ~"), "")
+  assert.equal(Model.windowAddress(" 0x12"), "")
+  assert.equal(Model.windowAddress(null), "")
+})
+
+test("parseSpool carries a recorded window and drops a forged one", () => {
+  const rows = Model.parseSpool([
+    JSON.stringify({ id: "a", state: "working", cwd: "/p/one", ts: NOW, window: "0xabc123" }),
+    JSON.stringify({ id: "b", state: "working", cwd: "/p/two", ts: NOW, window: "title:evil" }),
+    JSON.stringify({ id: "c", state: "working", cwd: "/p/three", ts: NOW })
+  ].join("\n"))
+  assert.deepEqual(rows.map((r) => r.window), ["0xabc123", "", ""])
+})
+
+test("focusCommand prefers the recorded window, then the title, then nothing", () => {
+  assert.deepEqual(Model.focusCommand({ window: "0xabc123", project: "repo" }),
+    ["hyprctl", "dispatch", "focuswindow", "address:0xabc123"])
+  assert.deepEqual(Model.focusCommand({ window: "", project: "repo" }),
+    ["hyprctl", "dispatch", "focuswindow", "title:repo"])
+  assert.deepEqual(Model.focusCommand({ window: "not-an-address", project: "repo" }),
+    ["hyprctl", "dispatch", "focuswindow", "title:repo"])
+  assert.deepEqual(Model.focusCommand({ window: "", project: "bad\nselector" }), [])
+  assert.deepEqual(Model.focusCommand({ window: "", project: "" }), [])
+  assert.deepEqual(Model.focusCommand(null), [])
+})
+
+test("focusSucceeded is true only when hyprctl reports ok", () => {
+  assert.equal(Model.focusSucceeded("ok\n"), true)
+  assert.equal(Model.focusSucceeded("  ok  "), true)
+  assert.equal(Model.focusSucceeded("No such window found"), false)
+  assert.equal(Model.focusSucceeded("okay"), false)
+  assert.equal(Model.focusSucceeded(""), false)
+  assert.equal(Model.focusSucceeded(undefined), false)
 })

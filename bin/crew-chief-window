@@ -1,0 +1,56 @@
+#!/bin/bash
+# Print the Hyprland address of the window that owns the calling process, or
+# print nothing.
+#
+# A click on a Crew Chief row used to run `focuswindow title:<project>`. That
+# only works while the terminal title still contains the project folder, and
+# Claude Code renames its terminal to a summary of the current task, so for most
+# sessions the click silently did nothing (issue #7). Reporters run inside the
+# agent's own terminal, so they can find that terminal's window here: walk up
+# the process tree from the reporter to the first ancestor that owns a Hyprland
+# window, and record its address. A click then focuses that exact window.
+#
+# Prints nothing and exits 0 whenever it cannot tell, so a reporter never fails
+# because of it:
+# - not inside Hyprland, or hyprctl is missing, slow or prints something odd;
+# - no ancestor owns a window. Inside tmux or zellij the pane's ancestors lead
+#   to the multiplexer server, not to the terminal window;
+# - the owning process has more than one window, as with a single-process
+#   terminal such as `foot --server`. Picking one of them would be a guess.
+#
+# Usage: crew-chief-window [START_PID]   (defaults to the caller's PID)
+set -uo pipefail
+
+start="${1:-$PPID}"
+[[ $start =~ ^[0-9]{1,10}$ ]] || exit 0
+command -v hyprctl >/dev/null 2>&1 || exit 0
+command -v jq >/dev/null 2>&1 || exit 0
+clients=$(timeout 1 hyprctl clients -j 2>/dev/null) || exit 0
+[[ ${#clients} -le 1048576 ]] || exit 0
+
+# One line per window-owning PID: "PID ADDRESS", or "PID AMBIGUOUS" when that
+# process owns several windows.
+declare -A owner=()
+while read -r pid address; do
+  [[ $pid =~ ^[0-9]{1,10}$ ]] || continue
+  owner[$pid]=$address
+done < <(timeout 2 jq -r '
+  [.[]? | select((.pid | type) == "number" and (.address | type) == "string")]
+  | group_by(.pid)[]
+  | "\(.[0].pid) \(if length == 1 then .[0].address else "AMBIGUOUS" end)"
+' <<<"$clients" 2>/dev/null)
+
+pid=$start
+for ((depth = 0; depth < 32; depth++)); do
+  [[ $pid =~ ^[0-9]{1,10}$ ]] && ((pid > 1)) || exit 0
+  if [[ -n ${owner[$pid]:-} ]]; then
+    address=${owner[$pid]}
+    [[ $address =~ ^0x[0-9a-fA-F]{1,16}$ ]] && printf '%s\n' "$address"
+    exit 0
+  fi
+  # /proc/PID/stat is "PID (COMM) STATE PPID ...", and COMM may itself contain
+  # spaces or parentheses, so read the fields after the LAST closing paren.
+  stat=$(<"/proc/$pid/stat") 2>/dev/null || exit 0
+  read -r _ pid _ <<<"${stat##*) }"
+done
+exit 0

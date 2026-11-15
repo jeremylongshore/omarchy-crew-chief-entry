@@ -34,8 +34,10 @@ All state operations go through `bin/crew-chief-spool`:
 
 The QML model repeats the file-count, session-count, and byte bounds. It marks a
 partial census visibly instead of presenting an incomplete fleet as complete.
-Every data-bound `Text` is plain text and length-capped. Project focusing passes
-one validated, control-free argument to `hyprctl`; no shell evaluates it.
+Every data-bound `Text` is plain text and length-capped. Window focusing passes
+one validated argument to `hyprctl`; no shell evaluates it. A recorded window
+must be a hexadecimal Hyprland address, checked by both the spool writer and the
+QML model; a title fallback is control-free and length-capped.
 
 ## External effects
 
@@ -46,6 +48,9 @@ one validated, control-free argument to `hyprctl`; no shell evaluates it.
   bundled adapter.
 - Optionally invokes `hyprctl dispatch focuswindow` when the user activates a
   row.
+- Reporters read `hyprctl clients -j` and their own ancestors' `/proc/<pid>/stat`
+  to record which window they run in. Nothing leaves the machine, and only the
+  window address is stored.
 - The Claude Code hook installer changes only `~/.claude/settings.json`, makes
   a backup, is idempotent, and runs only when the user explicitly invokes it.
 

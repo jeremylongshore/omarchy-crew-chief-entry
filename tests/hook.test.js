@@ -186,3 +186,65 @@ test("herdr adapter snapshots agents, maps states, prunes vanished rows", (t) =>
   execFileSync("bash", [adapter], { env: { ...process.env, CREW_CHIEF_SPOOL: spool, PATH: "/usr/bin:/bin" } })
   assert.deepEqual(jsonFiles(spool).sort(), ["herdr-t1.json", "manual.json"])
 })
+
+// A stand-in hyprctl that prints the given client list for `clients -j`. The
+// hook's process tree runs up through this node test process, so a client
+// whose pid is process.pid plays the agent's terminal window.
+function fakeHyprctl(t, clients) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "crew-chief-hyprctl-"))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  fs.writeFileSync(path.join(dir, "clients.json"), JSON.stringify(clients))
+  fs.writeFileSync(path.join(dir, "hyprctl"),
+    '#!/bin/bash\n[[ "$*" == "clients -j" ]] && cat "' + path.join(dir, "clients.json") + '"\n',
+    { mode: 0o755 })
+  return { ...process.env, PATH: dir + ":" + process.env.PATH }
+}
+
+function runHookWith(spool, payload, env) {
+  execFileSync("bash", [HOOK], { input: JSON.stringify(payload), env: { ...env, CREW_CHIEF_SPOOL: spool } })
+}
+
+test("hook records the Hyprland window that owns the agent's terminal", (t) => {
+  const spool = fs.mkdtempSync(path.join(os.tmpdir(), "crew-chief-test-"))
+  t.after(() => fs.rmSync(spool, { recursive: true, force: true }))
+  const env = fakeHyprctl(t, [
+    { address: "0xfeed01", pid: 999999 },
+    { address: "0x5a5a1", pid: process.pid }
+  ])
+  runHookWith(spool, { session_id: "w1", hook_event_name: "SessionStart", cwd: "/tmp/proj" }, env)
+  assert.equal(readSpool(spool, "w1").window, "0x5a5a1")
+})
+
+test("hook records no window when the owning process has several", (t) => {
+  const spool = fs.mkdtempSync(path.join(os.tmpdir(), "crew-chief-test-"))
+  t.after(() => fs.rmSync(spool, { recursive: true, force: true }))
+  const env = fakeHyprctl(t, [
+    { address: "0x5a5a1", pid: process.pid },
+    { address: "0x5a5a2", pid: process.pid }
+  ])
+  runHookWith(spool, { session_id: "w2", hook_event_name: "SessionStart", cwd: "/tmp/proj" }, env)
+  assert.equal(readSpool(spool, "w2").window, undefined)
+  assert.equal(readSpool(spool, "w2").state, "working")
+})
+
+test("a forged address from hyprctl never reaches the spool", (t) => {
+  const spool = fs.mkdtempSync(path.join(os.tmpdir(), "crew-chief-test-"))
+  t.after(() => fs.rmSync(spool, { recursive: true, force: true }))
+  const env = fakeHyprctl(t, [{ address: "0x1; touch /tmp/nope", pid: process.pid }])
+  runHookWith(spool, { session_id: "w3", hook_event_name: "Notification", cwd: "/tmp/proj", message: "hi" }, env)
+  const row = readSpool(spool, "w3")
+  assert.equal(row.window, undefined)
+  assert.equal(row.state, "needs_you")
+})
+
+test("reporter takes an explicit window and the spool drops a malformed one", (t) => {
+  const spool = fs.mkdtempSync(path.join(os.tmpdir(), "crew-chief-test-"))
+  t.after(() => fs.rmSync(spool, { recursive: true, force: true }))
+  const report = path.join(__dirname, "..", "bin", "crew-chief-report")
+  const env = { ...process.env, CREW_CHIEF_SPOOL: spool }
+  execFileSync(report, ["working", "--id", "r1", "--window", "0xabc123"], { env })
+  assert.equal(readSpool(spool, "r1").window, "0xabc123")
+  execFileSync(report, ["working", "--id", "r2", "--window", "title:evil"], { env })
+  assert.equal(readSpool(spool, "r2").window, undefined)
+  assert.equal(readSpool(spool, "r2").state, "working")
+})

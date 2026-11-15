@@ -10,6 +10,11 @@ Regenerate with `scripts/gen-changelog.sh`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Focus the session's own terminal window on a row click, recorded by the reporter, instead of a title match that Claude Code's task titles defeat (#7).
+- Say in the panel header when a click focused nothing, instead of staying silent.
+
 ## [1.1.0] - 2026-08-29
 
 ### Security

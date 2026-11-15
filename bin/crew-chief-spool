@@ -118,7 +118,7 @@ sub payload_from_row {
         unless valid_id($row->{id}) && $row->{id} eq $expected_id;
     die "invalid spool state\n"
         unless ($row->{state} // '') =~ /\A(?:working|needs_you|done)\z/;
-    for my $key (qw(cwd agent message)) {
+    for my $key (qw(cwd agent message window)) {
         die "invalid spool field\n" if ref($row->{$key});
     }
     die "invalid spool timestamp\n"
@@ -131,6 +131,11 @@ sub payload_from_row {
         message => substr($row->{message} // '', 0, 512),
         ts      => 0 + $row->{ts},
     };
+    # A Hyprland window address recorded by the reporter, used only to focus
+    # that window on a click. Anything that is not an address is dropped
+    # rather than failing the write, so the row still reports.
+    my $window = $row->{window} // '';
+    $clean->{window} = $window if $window =~ /\A0x[0-9a-fA-F]{1,16}\z/;
     my $payload = encode_json($clean) . "\n";
     die "spool record exceeded file bound\n"
         if length($payload) > $MAX_FILE_BYTES;

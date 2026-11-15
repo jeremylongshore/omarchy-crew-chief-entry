@@ -23,6 +23,7 @@ stryker.config.json
 contracts/*.md
 bin/crew-chief-spool
 bin/read-spool
+bin/crew-chief-window
 hooks/crew-chief-event
 adapters/codex-notify
 adapters/herdr-sync

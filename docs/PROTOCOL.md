@@ -17,6 +17,7 @@ run the bundled reporter can appear in the fleet.**
   "cwd": "/home/dev/projects/payments-api",
   "agent": "goose",
   "message": "",
+  "window": "0x55d3c2a1b2c0",
   "ts": 1766200000000
 }
 ```
@@ -28,6 +29,7 @@ run the bundled reporter can appear in the fleet.**
 | `cwd` | no | Project directory; the last path segment becomes the row label |
 | `agent` | no | Harness name (`claude-code`, `codex`, `goose`, `kilo`, `pi`, `hermes`, ...) shown dimmed on the row |
 | `message` | no | Capped one-line attention headline shown under a `needs_you` row; never include secrets or transcript text |
+| `window` | no | Hyprland address of the session's terminal window, as `hyprctl clients -j` prints it. A row click focuses it. Anything that is not `0x` plus 1 to 16 hex digits is dropped. The bundled reporters fill it in with `bin/crew-chief-window` |
 | `ts` | yes | Unix epoch **milliseconds** of the last event. Rows stale for 4h (configurable) drop off |
 
 - Write and remove only through `bin/crew-chief-spool` (normally via
