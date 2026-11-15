@@ -9,4 +9,3 @@
 | Operate without network, accounts, or telemetry | local reporters/adapters only | security contract and gate C38 |
 | Work by mouse and keyboard | `PanelKeyCatcher`, row/clear controls | accessibility contract and Buzz render |
 | Tell the marketplace a complete, specific story | exact descriptions, banner, preview receipts | contract test and gate C43 |
-

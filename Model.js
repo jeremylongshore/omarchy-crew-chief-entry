@@ -161,6 +161,18 @@ function windowAddress(value) {
   return /^0x[0-9a-fA-F]{1,16}$/.test(value) ? value : ""
 }
 
+// A title selector for one project, or "". Hyprland matches `title:` as a
+// regular expression against the WHOLE window title (RE2 FullMatch in 0.57.2,
+// src/desktop/state/ViewQuery.cpp), so a bare name only matched a window titled
+// exactly that, and a name like "c++" was not even a valid pattern. The name is
+// escaped so it is read literally, and wrapped in .* so any title that
+// contains it matches.
+function titleSelector(project) {
+  var target = focusTarget(project)
+  if (!target) return ""
+  return "title:.*" + target.replace(/[\\.^$|?*+()[\]{}]/g, "\\$&") + ".*"
+}
+
 // Window selectors to try for one session, best first. The address the
 // session's own reporter recorded names the exact terminal window. The title
 // match is the fallback for reporters that could not see a window, and it only
@@ -171,8 +183,8 @@ function focusSelectors(session) {
   var out = []
   var address = windowAddress(session.window)
   if (address) out.push("address:" + address)
-  var target = focusTarget(session.project)
-  if (target) out.push("title:" + target)
+  var title = titleSelector(session.project)
+  if (title) out.push(title)
   return out
 }
 
@@ -311,6 +323,7 @@ if (typeof module !== "undefined") {
     projectName: projectName,
     focusTarget: focusTarget,
     windowAddress: windowAddress,
+    titleSelector: titleSelector,
     focusSelectors: focusSelectors,
     luaString: luaString,
     focusArgv: focusArgv,

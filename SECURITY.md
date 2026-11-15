@@ -48,7 +48,7 @@ surrogates, which have no byte form, are dropped.
 - No network access, account, API key, cookies, or telemetry.
 - Reads and writes only the private spool under
   `${XDG_STATE_HOME:-~/.local/state}/omarchy/crew-chief/`.
-- Optionally reads one bounded `herdr status --json` snapshot through the
+- Optionally reads one bounded `herdr agent list` snapshot through the
   bundled adapter.
 - Optionally invokes `hyprctl dispatch` when the user activates a row: first
   Hyprland's Lua form, `hl.dsp.focus({ window = "<selector>" })`, then the
@@ -60,4 +60,4 @@ surrogates, which have no byte form, are dropped.
 - The Claude Code hook installer changes only `~/.claude/settings.json`, makes
   a backup, is idempotent, and runs only when the user explicitly invokes it.
 
-Report a concern through a GitHub issue or email jeremy@intentsolutions.io.
+Report a concern through a GitHub issue or email <jeremy@intentsolutions.io>.

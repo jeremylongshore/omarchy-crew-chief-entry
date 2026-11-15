@@ -7,10 +7,10 @@
 # FocusChain.qml and Model.js in Quickshell under headless sway, with a stand-in
 # hyprctl on PATH that logs every call and answers by selector:
 #
-#   address:0x2 or title:good in the Lua form -> "ok", exit 0
-#   address:0x3 in the Lua form              -> "ok" but exit 1 (must count as a miss)
-#   title:slow in the Lua form               -> hangs (the deadline must end it)
-#   title:stubborn in the Lua form           -> hangs and ignores SIGTERM
+#   address 0x2, or project "good", in the Lua form -> "ok", exit 0
+#   address 0x3 in the Lua form                      -> "ok" but exit 1 (a miss)
+#   project "slow" in the Lua form                   -> hangs (the deadline must end it)
+#   project "stubborn" in the Lua form               -> hangs and ignores SIGTERM
 #   any other Lua form                       -> "warning: hl.focus: window not found"
 #   any classic form                         -> a Lua syntax error, exit 1
 #
@@ -58,11 +58,11 @@ cat > "$BASE/bin/hyprctl" <<FAKE
 #!/bin/sh
 printf '%s\n' "\$*" >> "$CALL_LOG"
 case "\$*" in
-  *'window = "address:0x2"'*|*'window = "title:good"'*) echo ok ;;
-  *'window = "address:0x3"'*) echo ok; exit 1 ;;
-  *'window = "title:slow"'*) exec sleep 30 >/dev/null ;;
-  *'window = "title:stubborn"'*) trap '' TERM; sleep 30 >/dev/null ;;
-  *'hl.dsp.focus'*) echo 'warning: hl.focus: window not found' ;;
+  *hl.dsp.focus*address:0x2*|*hl.dsp.focus*good*) echo ok ;;
+  *hl.dsp.focus*address:0x3*) echo ok; exit 1 ;;
+  *hl.dsp.focus*slow*) exec sleep 30 >/dev/null ;;
+  *hl.dsp.focus*stubborn*) trap '' TERM; sleep 30 >/dev/null ;;
+  *hl.dsp.focus*) echo 'warning: hl.focus: window not found' ;;
   *) echo 'error: 3 [string "return hl.dispatch(focuswindow ...)"]: syntax error'; exit 1 ;;
 esac
 FAKE
@@ -78,29 +78,32 @@ cat > "$BASE/shell/shell.qml" <<'QML'
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "Model.js" as Model
 
 ShellRoot {
   id: root
-  // lua(sel) and classic(sel) are the two attempt forms as hyprctl receives them.
-  function lua(sel) { return 'hl.dsp.focus({ window = "' + sel + '" })' }
-  function classic(sel) { return "focuswindow " + sel }
+  // lua(sel) and classic(sel) are the two attempt forms as hyprctl receives
+  // them; t(name) is the title selector the shipped Model builds for a project.
+  function lua(sel) { return Model.focusArgv(sel, "lua").slice(2).join(" ") }
+  function classic(sel) { return Model.focusArgv(sel, "classic").slice(2).join(" ") }
+  function t(name) { return Model.titleSelector(name) }
   readonly property string miss: "couldn't find that session's window"
   property var scenarios: [
     { name: "address-miss-then-title-hit", session: { window: "0x1", project: "good" },
-      expect: [lua("address:0x1"), classic("address:0x1"), lua("title:good")], notice: "" },
+      expect: [lua("address:0x1"), classic("address:0x1"), lua(t("good"))], notice: "" },
     { name: "address-hit-first-try", session: { window: "0x2", project: "good" },
       expect: [lua("address:0x2")], notice: "" },
     { name: "ok-with-failed-exit-is-a-miss", session: { window: "0x3", project: "good" },
-      expect: [lua("address:0x3"), classic("address:0x3"), lua("title:good")], notice: "" },
+      expect: [lua("address:0x3"), classic("address:0x3"), lua(t("good"))], notice: "" },
     { name: "every-attempt-refused", session: { window: "", project: "never" },
-      expect: [lua("title:never"), classic("title:never")], notice: miss },
+      expect: [lua(t("never")), classic(t("never"))], notice: miss },
     { name: "hung-attempt-times-out", session: { window: "", project: "slow" },
-      expect: [lua("title:slow"), classic("title:slow")], notice: miss, minMs: 2900 },
+      expect: [lua(t("slow")), classic(t("slow"))], notice: miss, minMs: 2900 },
     { name: "sigterm-ignoring-attempt-is-killed", session: { window: "", project: "stubborn" },
-      expect: [lua("title:stubborn"), classic("title:stubborn")], notice: miss, minMs: 3900 },
+      expect: [lua(t("stubborn")), classic(t("stubborn"))], notice: miss, minMs: 3900 },
     { name: "second-click-while-busy-is-ignored", session: { window: "0x1", project: "good" },
       secondClick: { window: "0x2", project: "good" },
-      expect: [lua("address:0x1"), classic("address:0x1"), lua("title:good")], notice: "" },
+      expect: [lua("address:0x1"), classic("address:0x1"), lua(t("good"))], notice: "" },
     { name: "nothing-to-focus", session: { window: "", project: "" },
       expect: [], notice: "no window recorded for that session" },
     { name: "hyprctl-missing", session: { window: "0x2", project: "good" }, hideBinary: true,
@@ -198,6 +201,8 @@ WARNINGS=$(grep -a -iE "(WARN|ERROR).*(qml|scene)|(qml|scene).*(WARN|ERROR)|is n
   | grep -avE "libEGL|MESA|ZINK|failed to get driver|failed to create dri2" | head -20 || true)
 printf '%s\n' "$WARNINGS"
 echo "===QUICKSHELL=== $(qs --version 2>/dev/null | head -1)"
+echo "===TESTED FILES==="
+(cd "$BASE/shell" && sha256sum FocusChain.qml Model.js)
 
 # Verdict: every scenario passed, the run finished, no QML warnings, and the
 # stand-in received exactly the attempts the chain launched, in order.

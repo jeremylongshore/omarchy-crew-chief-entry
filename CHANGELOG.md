@@ -14,6 +14,8 @@ Regenerate with `scripts/gen-changelog.sh`.
 
 ### Fixed
 
+- Match the title fallback against any window title that contains the project folder name, read literally. Hyprland matches a `title:` selector as a regular expression against the whole title, so the bare name only matched a window titled exactly that.
+- Name the command the Herdr adapter runs (`herdr agent list`) in README and SECURITY, and list `perl`, `hyprctl` and `timeout` as dependencies.
 - Qualify Omarchy's palette as `Commons.Color`, as the shell contract requires now that Qt 6.12 has its own `Color` type.
 - Target the session's own terminal window on a row click, recorded by the reporter, before falling back to a title match that Claude Code's task titles defeat (#7).
 - Say in the panel header when every focus attempt is refused, times out, or cannot start hyprctl, instead of staying silent.

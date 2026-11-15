@@ -23,4 +23,3 @@ so the UI can disclose a partial fleet.
 All state lifecycle operations are descriptor-bound and serialized. Consumers
 must preserve those boundaries rather than replacing the helper with direct
 `cat`, `find`, `sort`, or `rm` calls.
-

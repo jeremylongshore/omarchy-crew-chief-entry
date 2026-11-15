@@ -19,4 +19,3 @@ FIFO, oversized record, directory flood, and concurrent publication. Every
 operation finishes within its bound; external targets remain unchanged; the
 reader returns only complete same-owner regular JSON records and discloses a
 partial fleet.
-

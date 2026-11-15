@@ -28,7 +28,7 @@ in. Three integration tiers:
 
 | Harness | Integration | States you get |
 | --- | --- | --- |
-| **Anything running under [Herdr](https://herdr.dev)**, whose detection roster covers Claude Code, Codex, Amp, Cline, Copilot, and more | **zero config**: when `herdr` is installed, the widget consumes one bounded `herdr status --json` snapshot per poll (`herdrSync` setting, default On, harmless no-op without it) | working / needs you (blocked) / done, with the pane title as context |
+| **Anything running under [Herdr](https://herdr.dev)**, whose detection roster covers Claude Code, Codex, Amp, Cline, Copilot, and more | **zero config**: when `herdr` is installed, the widget consumes one bounded `herdr agent list` snapshot per poll (`herdrSync` setting, default On, harmless no-op without it) | working / needs you (blocked) / done, with the pane title as context |
 | **Claude Code** (standalone) | first-class hook adapter, one-command install (below) | working / needs you / done, with a bounded attention headline |
 | **OpenAI Codex** (standalone) | `adapters/codex-notify` wired into `notify` in `~/.codex/config.toml` | done (turn complete) |
 | **Goose, Kilo, pi, Hermes, aider, opencode, anything** | call `bin/crew-chief-report` from whatever event surface your tool has: hooks, notify programs, wrappers, extensions | whatever you report |
@@ -49,7 +49,7 @@ crew-chief-report end
 ```
 
 If your favorite harness has a native event surface you'd like a first-class adapter
-for, open an issue. Adapters are ~40 lines of bash.
+for, open an issue. Adapters are 25 to 55 lines of bash.
 
 ## Install
 
@@ -81,7 +81,7 @@ For everything else, call `bin/crew-chief-report` from your tool's event hooks. 
 ## How it works (Claude Code adapter)
 
 Claude Code fires [hook events](https://code.claude.com/docs/en/hooks) at lifecycle
-moments. The installed hook (`hooks/crew-chief-event`, ~40 lines of bash + jq) writes one
+moments. The installed hook (`hooks/crew-chief-event`, about 70 lines of bash + jq) writes one
 tiny JSON state file per session under `~/.local/state/omarchy/crew-chief/`:
 
 | Claude Code event | Session state |
@@ -108,14 +108,15 @@ candidate names, opens only regular same-owner files without following links, re
 - **Left-click a row**: try to focus the terminal window the session reported
   from. This is best effort. The reporter records which Hyprland window it is running in, and the
   click focuses that window by address. When no window was recorded, or it has
-  closed, the click falls back to matching the project name in the window
-  title. Each attempt uses Hyprland's Lua dispatch form first (Hyprland 0.57
+  closed, the click falls back to any window whose title contains the project
+  folder name, matched literally. Each attempt uses Hyprland's Lua dispatch form first (Hyprland 0.57
   and current Omarchy), then the classic `focuswindow` form for older
   releases. When every attempt is refused, the panel header says so for a few
   seconds.
   - The window can't be recorded inside tmux or zellij, or in a terminal that
     runs every window from one process, such as `foot --server`, kitty in
-    single-instance mode or WezTerm. Those sessions use the title match.
+    single-instance mode or WezTerm. Those sessions use the title match, which
+    works only while the terminal title contains the project folder name.
 - **Right-click a row**: dismiss it from the list.
 - **CLEAR FINISHED**: sweep away all `DONE` rows at once.
 - Stale sessions (no event for 4h, configurable) drop off automatically.
@@ -142,6 +143,10 @@ To unwire the hook, restore the backup the installer made
 ## Dependencies
 
 - `jq` (ships with Omarchy), used by the hook scripts and reporter.
+- `perl` with its core modules, for the spool helper (`bin/crew-chief-spool`). It
+  is on a stock Omarchy install, where first-party scripts use it too.
+- `hyprctl` (ships with Hyprland), to record and focus a session's window, and
+  coreutils `timeout`, which bounds every `hyprctl` call.
 - At least one agent harness to watch: [Claude Code](https://code.claude.com) (hooks,
   any 2025+ release), [Codex CLI](https://github.com/openai/codex) (`notify`), or
   anything that can invoke `crew-chief-report`.

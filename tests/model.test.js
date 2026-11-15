@@ -263,9 +263,9 @@ function luaDecode(literal) {
 }
 
 test("focusSelectors prefers the recorded window, then the title, then nothing", () => {
-  assert.deepEqual(Model.focusSelectors({ window: "0xabc123", project: "repo" }), ["address:0xabc123", "title:repo"])
-  assert.deepEqual(Model.focusSelectors({ window: "", project: "repo" }), ["title:repo"])
-  assert.deepEqual(Model.focusSelectors({ window: "not-an-address", project: "repo" }), ["title:repo"])
+  assert.deepEqual(Model.focusSelectors({ window: "0xabc123", project: "repo" }), ["address:0xabc123", "title:.*repo.*"])
+  assert.deepEqual(Model.focusSelectors({ window: "", project: "repo" }), ["title:.*repo.*"])
+  assert.deepEqual(Model.focusSelectors({ window: "not-an-address", project: "repo" }), ["title:.*repo.*"])
   assert.deepEqual(Model.focusSelectors({ window: "0xabc123", project: "" }), ["address:0xabc123"])
   assert.deepEqual(Model.focusSelectors({ window: "", project: "bad\nselector" }), [])
   assert.deepEqual(Model.focusSelectors(null), [])
@@ -282,8 +282,8 @@ test("focusAttempts tries each selector in Lua form, then classic form", () => {
   assert.deepEqual(Model.focusAttempts({ window: "0xabc", project: "web" }), [
     ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "address:0xabc" })'],
     ["hyprctl", "dispatch", "focuswindow", "address:0xabc"],
-    ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "title:web" })'],
-    ["hyprctl", "dispatch", "focuswindow", "title:web"]
+    ["hyprctl", "dispatch", 'hl.dsp.focus({ window = "title:.\\042web.\\042" })'],
+    ["hyprctl", "dispatch", "focuswindow", "title:.*web.*"]
   ])
   assert.deepEqual(Model.focusAttempts({ window: "", project: "" }), [])
 })
@@ -339,5 +339,18 @@ test("the panel's live and sorted lists keep each session's window", () => {
   ].join("\n"))
   const shown = Model.sortSessions(Model.liveSessions(rows, NOW, 60000))
   assert.deepEqual(shown.map((r) => [r.id, r.window]), [["a", "0xa1"], ["b", "0xb2"]])
-  assert.deepEqual(Model.focusSelectors(shown[0]), ["address:0xa1", "title:a"])
+  assert.deepEqual(Model.focusSelectors(shown[0]), ["address:0xa1", "title:.*a.*"])
+})
+
+test("titleSelector matches any title containing the project, read literally", () => {
+  assert.equal(Model.titleSelector("crew-chief"), "title:.*crew-chief.*")
+  assert.equal(Model.titleSelector("c++ (beta)"), "title:.*c\\+\\+ \\(beta\\).*")
+  assert.equal(Model.titleSelector("a.b|c^$?*[x]{y}\\z"), "title:.*a\\.b\\|c\\^\\$\\?\\*\\[x\\]\\{y\\}\\\\z.*")
+  assert.equal(Model.titleSelector(""), "")
+  assert.equal(Model.titleSelector("bad\nname"), "")
+  // The escaped name is a valid pattern that matches a title containing it
+  // literally (JS RegExp stands in for RE2 here; both accept these escapes).
+  const body = Model.titleSelector("c++ (beta)").slice("title:".length)
+  assert.match("jeremy@box: ~/src/c++ (beta)", new RegExp("^" + body + "$"))
+  assert.doesNotMatch("jeremy@box: ~/src/cxx (beta)", new RegExp("^" + body + "$"))
 })
