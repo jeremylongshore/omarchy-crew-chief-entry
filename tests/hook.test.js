@@ -1,6 +1,6 @@
 const test = require("node:test")
 const assert = require("node:assert/strict")
-const { execFileSync } = require("node:child_process")
+const { execFileSync, spawnSync } = require("node:child_process")
 const fs = require("node:fs")
 const os = require("node:os")
 const path = require("node:path")
@@ -262,4 +262,32 @@ test("window helper gives up on an oversized client list instead of parsing a pr
   const pad = "x".repeat(1100000)
   const env = fakeHyprctl(t, [{ address: "0xbeef", pid: process.pid, title: pad }])
   assert.equal(execFileSync(helper, [String(process.pid)], { env, encoding: "utf8" }), "")
+})
+
+test("a recorded window survives the panel's real read path", (t) => {
+  const spool = fs.mkdtempSync(path.join(os.tmpdir(), "crew-chief-test-"))
+  t.after(() => fs.rmSync(spool, { recursive: true, force: true }))
+  const report = path.join(__dirname, "..", "bin", "crew-chief-report")
+  const reader = path.join(__dirname, "..", "bin", "read-spool")
+  const env = { ...process.env, CREW_CHIEF_SPOOL: spool }
+  execFileSync(report, ["needs_you", "--id", "rp1", "--cwd", "/p/web", "--window", "0x5a5a1"], { env })
+  execFileSync(report, ["working", "--id", "rp2", "--cwd", "/p/api"], { env })
+  const out = execFileSync(reader, [spool, ""], { env, encoding: "utf8" })
+  const Model = require("../Model.js")
+  const byId = Object.fromEntries(Model.parseSpool(out).map((s) => [s.id, s]))
+  assert.equal(byId.rp1.window, "0x5a5a1")
+  assert.deepEqual(Model.focusSelectors(byId.rp1), ["address:0x5a5a1", "title:web"])
+  assert.deepEqual(Model.focusSelectors(byId.rp2), ["title:api"])
+})
+
+test("reporter refuses --window without a value instead of crashing", (t) => {
+  const spool = fs.mkdtempSync(path.join(os.tmpdir(), "crew-chief-test-"))
+  t.after(() => fs.rmSync(spool, { recursive: true, force: true }))
+  const report = path.join(__dirname, "..", "bin", "crew-chief-report")
+  const result = spawnSync(report, ["working", "--id", "r9", "--window"], {
+    env: { ...process.env, CREW_CHIEF_SPOOL: spool }, encoding: "utf8"
+  })
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /--window needs a value/)
+  assert.equal(fs.existsSync(path.join(spool, "r9.json")), false)
 })

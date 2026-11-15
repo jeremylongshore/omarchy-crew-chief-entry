@@ -9,6 +9,7 @@ scripts/sync-gate-lane.sh
 scripts/check-lane-freshness.sh
 scripts/rig-verify.sh
 scripts/rig-render.sh
+scripts/rig-focus-chain.sh
 scripts/approve-preview.sh
 scripts/gates/.lane-manifest
 scripts/gates/*.sh

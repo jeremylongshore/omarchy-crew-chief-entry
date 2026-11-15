@@ -34,13 +34,14 @@ All state operations go through `bin/crew-chief-spool`:
 
 The QML model repeats the file-count, session-count, and byte bounds. It marks a
 partial census visibly instead of presenting an incomplete fleet as complete.
-Every data-bound `Text` is plain text and length-capped. Window focusing passes
-one argv to `hyprctl`; no shell evaluates it. A recorded window must be a
+Every data-bound `Text` is plain text and length-capped. Each focus attempt is
+an argv list handed straight to `hyprctl`; no shell evaluates it. A recorded window must be a
 hexadecimal Hyprland address, checked by both the spool writer and the QML
 model; a title fallback is control-free and length-capped. Hyprland's Lua
 dispatch form is evaluated as Lua by the compositor, so the selector is written
 as a Lua string with every byte outside letters, digits, space and `._:-`
-escaped as `\ddd`, and a project name cannot close the string.
+escaped as `\ddd`, and a project name cannot close the string. Unpaired UTF-16
+surrogates, which have no byte form, are dropped.
 
 ## External effects
 
@@ -49,8 +50,10 @@ escaped as `\ddd`, and a project name cannot close the string.
   `${XDG_STATE_HOME:-~/.local/state}/omarchy/crew-chief/`.
 - Optionally reads one bounded `herdr status --json` snapshot through the
   bundled adapter.
-- Optionally invokes `hyprctl dispatch focuswindow` when the user activates a
-  row.
+- Optionally invokes `hyprctl dispatch` when the user activates a row: first
+  Hyprland's Lua form, `hl.dsp.focus({ window = "<selector>" })`, then the
+  classic `focuswindow <selector>`, for the recorded window address and then
+  the title match, stopping at the first `ok`. At most four calls per click.
 - Reporters read `hyprctl clients -j` and their own ancestors' `/proc/<pid>/stat`
   to record which window they run in. Nothing leaves the machine, and only the
   window address is stored.

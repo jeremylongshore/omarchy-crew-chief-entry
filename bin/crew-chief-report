@@ -37,7 +37,9 @@ while [[ $# -gt 0 ]]; do
     --cwd) cwd="$2"; shift 2 ;;
     --agent) agent="$2"; shift 2 ;;
     --message) message="$2"; shift 2 ;;
-    --window) window="$2"; window_given=1; shift 2 ;;
+    --window)
+      [[ $# -ge 2 ]] || { echo "crew-chief-report: --window needs a value" >&2; exit 2; }
+      window="$2"; window_given=1; shift 2 ;;
     *) echo "crew-chief-report: unknown option $1" >&2; exit 2 ;;
   esac
 done
