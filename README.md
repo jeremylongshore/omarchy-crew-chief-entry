@@ -105,8 +105,8 @@ candidate names, opens only regular same-owner files without following links, re
 
 - **Rows sort attention-first**. The session that's waited longest on you is on top,
   with its reporter-supplied attention headline under the project name.
-- **Left-click a row**: jump to the terminal window the session reported
-  from. The reporter records which Hyprland window it is running in, and the
+- **Left-click a row**: try to focus the terminal window the session reported
+  from. This is best effort. The reporter records which Hyprland window it is running in, and the
   click focuses that window by address. When no window was recorded, or it has
   closed, the click falls back to matching the project name in the window
   title. Each attempt uses Hyprland's Lua dispatch form first (Hyprland 0.57

@@ -192,8 +192,11 @@ function luaString(text) {
     var chunk = ch
     var code = value.charCodeAt(i)
     if (code >= 0xD800 && code <= 0xDBFF && i + 1 < value.length) {
-      chunk = value.substr(i, 2)
-      i++
+      var low = value.charCodeAt(i + 1)
+      if (low >= 0xDC00 && low <= 0xDFFF) {
+        chunk = value.substr(i, 2)
+        i++
+      }
     }
     var encoded
     try { encoded = encodeURIComponent(chunk) } catch (e) { continue }
@@ -228,8 +231,10 @@ function focusAttempts(session) {
 
 // `hyprctl dispatch` prints "ok" when it acted. On Hyprland 0.57 a window that
 // is not found prints an error instead, as does a dispatch form the running
-// Hyprland does not understand, so the panel moves on to the next attempt.
-function focusSucceeded(output) {
+// Hyprland does not understand, so the panel moves on to the next attempt. A
+// known non-zero exit code is a failure even if stdout says ok.
+function focusSucceeded(output, exitCode) {
+  if (typeof exitCode === "number" && exitCode !== 0) return false
   return String(output || "").trim() === "ok"
 }
 

@@ -312,6 +312,11 @@ test("luaString pads every escape to three digits and handles surrogate edges", 
   }
   assert.equal(Model.luaString("\uDC00a"), '"a"')
   assert.equal(Model.luaString("x\uD800"), '"x"')
+  assert.equal(Model.luaString("a\uD800b"), '"ab"')
+  assert.equal(Model.luaString("!\uDC00"), '"\\033"')
+  assert.equal(luaDecode(Model.luaString("\uD800\uE000")), "\uE000")
+  assert.equal(Model.luaString("a\uDBFFb"), '"ab"')
+  assert.equal(luaDecode(Model.luaString("a\uD800\uD800\uDC00b")), "a\u{10000}b")
 })
 
 test("focusSucceeded is true only when hyprctl reports ok", () => {
@@ -321,4 +326,18 @@ test("focusSucceeded is true only when hyprctl reports ok", () => {
   assert.equal(Model.focusSucceeded("okay"), false)
   assert.equal(Model.focusSucceeded(""), false)
   assert.equal(Model.focusSucceeded(undefined), false)
+  assert.equal(Model.focusSucceeded("ok", 0), true)
+  assert.equal(Model.focusSucceeded("ok", 1), false)
+  assert.equal(Model.focusSucceeded("ok", -1), false)
+  assert.equal(Model.focusSucceeded("nope", 0), false)
+})
+
+test("the panel's live and sorted lists keep each session's window", () => {
+  const rows = Model.parseSpool([
+    JSON.stringify({ id: "a", state: "needs_you", cwd: "/p/a", ts: NOW - 1000, window: "0xa1" }),
+    JSON.stringify({ id: "b", state: "working", cwd: "/p/b", ts: NOW - 2000, window: "0xb2" })
+  ].join("\n"))
+  const shown = Model.sortSessions(Model.liveSessions(rows, NOW, 60000))
+  assert.deepEqual(shown.map((r) => [r.id, r.window]), [["a", "0xa1"], ["b", "0xb2"]])
+  assert.deepEqual(Model.focusSelectors(shown[0]), ["address:0xa1", "title:a"])
 })

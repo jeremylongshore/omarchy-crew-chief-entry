@@ -132,8 +132,9 @@ sub payload_from_row {
         ts      => 0 + $row->{ts},
     };
     # A Hyprland window address recorded by the reporter, used only to focus
-    # that window on a click. Anything that is not an address is dropped
-    # rather than failing the write, so the row still reports.
+    # that window on a click. A string that is not an address is dropped and
+    # the row still reports; a structured value is rejected above, like any
+    # other field.
     my $window = $row->{window} // '';
     $clean->{window} = $window if $window =~ /\A0x[0-9a-fA-F]{1,16}\z/;
     my $payload = encode_json($clean) . "\n";

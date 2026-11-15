@@ -4,8 +4,10 @@ import Quickshell.Io
 import "Model.js" as Model
 
 // Runs a row click's focus attempts (Model.focusAttempts) one at a time and
-// stops at the first one hyprctl reports as "ok". When every attempt is refused,
-// or hyprctl cannot be started, `notice` says so for five seconds.
+// stops at the first one hyprctl reports as "ok" with exit status 0. When every
+// attempt is refused, times out, or hyprctl cannot be started, `notice` says so
+// for five seconds. An attempt that runs past `attemptTimeoutMs` is sent
+// SIGTERM, then SIGKILL a second later, and counts as refused.
 //
 // Kept apart from Panel.qml so the exact shipped chain can be loaded on its own
 // in a real Quickshell and driven against a stand-in hyprctl
@@ -29,6 +31,8 @@ Item {
   property bool awaitingExit: false
   // Every argv this chain launched, for the rig harness to inspect.
   property var launched: []
+  property int attemptTimeoutMs: 3000
+  property bool terminateSent: false
 
   // Not named focus: every Item already has a `focus` property, which shadows a
   // function of that name, so a call would throw "not a function".
@@ -48,6 +52,9 @@ Item {
     launched = launched.concat([argv])
     proc.command = argv
     awaitingExit = true
+    terminateSent = false
+    deadline.interval = attemptTimeoutMs
+    deadline.restart()
     proc.running = true
   }
 
@@ -73,9 +80,10 @@ Item {
       waitForEnd: true
       onStreamFinished: proc.reply = text
     }
-    onExited: {
+    onExited: function(exitCode, exitStatus) {
+      deadline.stop()
       chain.awaitingExit = false
-      var ok = Model.focusSucceeded(reply)
+      var ok = Model.focusSucceeded(reply, exitCode)
       reply = ""
       if (ok) {
         chain.queue = []
@@ -85,9 +93,27 @@ Item {
     }
     onRunningChanged: {
       if (running || !chain.awaitingExit) return
+      deadline.stop()
       chain.awaitingExit = false
       chain.queue = []
       chain.showNotice("hyprctl did not start")
+    }
+  }
+
+  // A hung hyprctl must not hold the chain forever: terminate, then kill. Its
+  // exit then runs the normal onExited path with no "ok" reply.
+  Timer {
+    id: deadline
+    onTriggered: {
+      if (!proc.running) return
+      if (!chain.terminateSent) {
+        chain.terminateSent = true
+        proc.signal(15)
+        interval = 1000
+        restart()
+        return
+      }
+      proc.signal(9)
     }
   }
 

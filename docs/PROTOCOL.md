@@ -29,7 +29,7 @@ run the bundled reporter can appear in the fleet.**
 | `cwd` | no | Project directory; the last path segment becomes the row label |
 | `agent` | no | Harness name (`claude-code`, `codex`, `goose`, `kilo`, `pi`, `hermes`, ...) shown dimmed on the row |
 | `message` | no | Capped one-line attention headline shown under a `needs_you` row; never include secrets or transcript text |
-| `window` | no | Hyprland address of the session's terminal window, as `hyprctl clients -j` prints it. The panel uses it as the first focus target for a row click. Anything that is not `0x` plus 1 to 16 hex digits is dropped. The bundled reporters fill it in with `bin/crew-chief-window` |
+| `window` | no | Hyprland address of the session's terminal window, as `hyprctl clients -j` prints it. The panel uses it as the first focus target for a row click. A string that is not `0x` plus 1 to 16 hex digits is dropped; an array or object rejects the record. The bundled reporters fill it in with `bin/crew-chief-window` |
 | `ts` | yes | Unix epoch **milliseconds** of the last event. Rows stale for 4h (configurable) drop off |
 
 - Write and remove only through `bin/crew-chief-spool` (normally via

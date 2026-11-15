@@ -4,8 +4,10 @@ One bounded JSON object represents one local agent session. Required fields are
 `id`, `state`, and `ts`; optional fields are `cwd`, `agent`, `message`,
 and `window`. `state` is `working`, `needs_you`, or `done`. Unknown states
 normalize to `working`. `window` is the Hyprland address of the session's
-terminal window, `0x` plus 1 to 16 hex digits; the writer and the reader both
-drop any other value, and a record without it remains valid.
+terminal window, `0x` plus 1 to 16 hex digits. The writer drops any other
+string and rejects a record whose `window` is an array or object, as it does
+for every field; the reader ignores anything that is not an address string. A
+record without it remains valid.
 
 Writers must invoke `bin/crew-chief-report` or `bin/crew-chief-spool write`;
 they must not create spool files directly. Identifiers accept only ASCII
