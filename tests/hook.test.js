@@ -276,8 +276,8 @@ test("a recorded window survives the panel's real read path", (t) => {
   const Model = require("../Model.js")
   const byId = Object.fromEntries(Model.parseSpool(out).map((s) => [s.id, s]))
   assert.equal(byId.rp1.window, "0x5a5a1")
-  assert.deepEqual(Model.focusSelectors(byId.rp1), ["address:0x5a5a1", "title:web"])
-  assert.deepEqual(Model.focusSelectors(byId.rp2), ["title:api"])
+  assert.deepEqual(Model.focusSelectors(byId.rp1), ["address:0x5a5a1", "title:.*web.*"])
+  assert.deepEqual(Model.focusSelectors(byId.rp2), ["title:.*api.*"])
 })
 
 test("reporter refuses --window without a value instead of crashing", (t) => {

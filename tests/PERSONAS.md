@@ -14,4 +14,3 @@ Tab, refresh, focus, dismiss, and clear actions to have stable behavior.
 
 Needs lifecycle metadata to remain local, bounded, inspectable, and explicit
 about the fact that reporter-supplied messages persist on disk.
-

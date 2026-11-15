@@ -34,5 +34,5 @@ test("the public Crew Chief model has a deterministic behavioral signature", () 
     focusResults: ["ok\n", "No such window found", ""].map(Model.focusSucceeded)
   }
   const digest = crypto.createHash("sha256").update(JSON.stringify(signature)).digest("hex")
-  assert.equal(digest, "9cfa34c370fb29f9840cccc3bb859e80a5ae9f9bd73713609625ef76f3edc8b9")
+  assert.equal(digest, "f2d77ded7764fed5b40f6b3dcdd4f6ddc56eec9c4316dbba77291e417f5dad75")
 })

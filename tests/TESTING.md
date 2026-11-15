@@ -9,7 +9,7 @@ Crew Chief uses a seven-layer fail-closed test model.
 | Unit | Model parsing, normalization, bounds, ordering, labels, ages, and keyboard/accessibility contracts |
 | Integration | Real hooks, reporters, installer, Herdr adapter, and descriptor-bound spool helper against temporary homes |
 | System | `rig-verify.sh` runs the upstream validator and `qmllint` inside Buzz production |
-| System | `rig-focus-chain.sh` loads the shipped `FocusChain.qml` in a real Quickshell on the rig and drives five click scenarios against a stand-in `hyprctl`, checking every attempt launched and every notice. No live Hyprland: its headless backend needs a render node the rig lacks |
+| System | `rig-focus-chain.sh` loads the shipped `FocusChain.qml` in a real Quickshell on the rig and drives nine click scenarios against a stand-in `hyprctl`, checking every attempt launched and every notice. No live Hyprland: its headless backend needs a render node the rig lacks |
 | E2E | `e2e/buzz.sh` installs the runtime in an isolated real shell, seeds records through unchanged production reporters/hooks, opens the panel by IPC, and captures the full frame |
 | Acceptance | C43 requires two exact 500-character descriptions, a themed banner, a hash-bound render receipt, and explicit approval of the exact preview SHA |
 
