@@ -22,7 +22,7 @@ test("marketplace descriptions use the complete 500-character allowance", () => 
 test("manifest identity and version are release-specific", () => {
   assert.equal(manifest.id, "io.github.jeremylongshore.crew-chief")
   assert.equal(manifest.name, "Crew Chief")
-  assert.equal(manifest.version, "1.1.0")
+  assert.equal(manifest.version, "1.2.0")
   assert.deepEqual(manifest.kinds, ["bar-widget"])
 })
 

@@ -1,6 +1,6 @@
 {
   "name": "omarchy-crew-chief",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "license": "MIT",
   "description": "Claude Code fleet attention router for the Omarchy bar - dev harness for Model.js and the hook script",

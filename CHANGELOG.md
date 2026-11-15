@@ -10,6 +10,8 @@ Regenerate with `scripts/gen-changelog.sh`.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-15
+
 ### Fixed
 
 - Target the session's own terminal window on a row click, recorded by the reporter, before falling back to a title match that Claude Code's task titles defeat (#7).
